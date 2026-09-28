@@ -1,49 +1,33 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#05070a">
-  <title>NEXA</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#05070a">
+<title>NEXA</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="orb"></div>
-        <div>
-          <h1>NEXA</h1>
-          <span>Assistente pessoal</span>
-        </div>
-      </div>
-      <span class="status"><i></i> Online</span>
-    </header>
-
-    <section class="hero">
-      <div class="core">
-        <div class="core-ring"></div>
-        <div class="core-dot"></div>
-      </div>
-      <h2>Olá. Eu sou a NEXA.</h2>
-      <p>Seu assistente pessoal está pronto para começar.</p>
-    </section>
-
-    <section class="chat" id="chat">
-      <div class="message nexa">
-        <span class="label">NEXA</span>
-        <p>Por enquanto estou em minha primeira versão. Em breve você poderá conversar comigo usando inteligência artificial.</p>
-      </div>
-    </section>
-
-    <form class="composer" id="composer">
-      <input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off">
-      <button type="button" id="micButton" aria-label="Microfone">◉</button>
-      <button type="submit" aria-label="Enviar">➤</button>
-    </form>
-
-    <footer>NEXA v0.1 • Projeto experimental</footer>
-  </main>
-  <script src="script.js"></script>
+<main class="app">
+<header class="topbar">
+<div class="brand"><div class="orb"></div><div><h1>NEXA</h1><span>Assistente pessoal</span></div></div>
+<span class="status"><i></i> Online</span>
+</header>
+<section class="hero">
+<div class="core"><div class="core-ring"></div><div class="core-dot"></div></div>
+<h2>Olá. Eu sou a NEXA.</h2>
+<p>Seu assistente pessoal está pronto para começar.</p>
+</section>
+<section class="chat" id="chat">
+<div class="message nexa"><span class="label">NEXA</span><p>Olá. Minha conexão com o Gemini está sendo inicializada. Pode falar comigo.</p></div>
+</section>
+<form class="composer" id="composer">
+<input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off">
+<button type="button" id="micButton" aria-label="Microfone">◉</button>
+<button type="submit" aria-label="Enviar">➤</button>
+</form>
+<footer>NEXA v0.2 • Gemini conectado via Cloudflare</footer>
+</main>
+<script src="script.js"></script>
 </body>
 </html>
