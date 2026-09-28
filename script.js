@@ -1,9 +1,158 @@
-const composer=document.getElementById("composer");const input=document.getElementById("messageInput");const chat=document.getElementById("chat");const micButton=document.getElementById("micButton");const sendButton=composer.querySelector('button[type="submit"]');const history=[];
+const composer = document.getElementById("composer");
+const input = document.getElementById("messageInput");
+const chat = document.getElementById("chat");
+const micButton = document.getElementById("micButton");
+const sendButton = composer.querySelector('button[type="submit"]');
 
-function addMessage(text,type){const message=document.createElement("div");message.className="message "+type;const label=document.createElement("span");label.className="label";label.textContent=type==="user"?"VOCÊ":"NEXA";const paragraph=document.createElement("p");paragraph.textContent=text;message.appendChild(label);message.appendChild(paragraph);chat.appendChild(message);message.scrollIntoView({behavior:"smooth",block:"end"});}
+const history = [];
 
-async function askNexa(text){const response=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,history:history.slice(-12)})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Não foi possível falar com o Gemini.");return data.reply;}
+function addMessage(text, type) {
+  const message = document.createElement("div");
+  message.className = "message " + type;
 
-composer.addEventListener("submit",async function(event){event.preventDefault();const text=input.value.trim();if(!text||sendButton.disabled)return;addMessage(text,"user");input.value="";sendButton.disabled=true;micButton.disabled=true;try{const reply=await askNexa(text);history.push({role:"user",text});history.push({role:"model",text:reply});addMessage(reply,"nexa");}catch(error){addMessage("Não consegui me conectar ao meu núcleo de IA agora. Verifique a configuração do Gemini no Cloudflare.","nexa");console.error(error);}finally{sendButton.disabled=false;micButton.disabled=false;input.focus();}});
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = type === "user" ? "VOCÊ" : "NEXA";
 
-micButton.addEventListener("click",function(){const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){addMessage("Seu navegador não disponibilizou reconhecimento de voz nesta versão.","nexa");return;}const recognition=new SpeechRecognition();recognition.lang="pt-BR";recognition.interimResults=false;recognition.onstart=function(){micButton.textContent="●";micButton.disabled=true;};recognition.onresult=function(event){input.value=event.results[0][0].transcript;input.focus();};recognition.onerror=function(){addMessage("Não consegui entender o áudio. Tente falar novamente.","nexa");};recognition.onend=function(){micButton.textContent="◉";micButton.disabled=false;};recognition.start();});
+  const paragraph = document.createElement("p");
+  paragraph.textContent = text;
+
+  message.appendChild(label);
+  message.appendChild(paragraph);
+  chat.appendChild(message);
+
+  message.scrollIntoView({
+    behavior: "smooth",
+    block: "end"
+  });
+}
+
+async function askNexa(text) {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/json"
+    },
+
+    body: JSON.stringify({
+      message: text,
+      history: history.slice(-12)
+    })
+  });
+
+  let data;
+
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(
+      `O servidor retornou uma resposta inválida (HTTP ${response.status}).`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+      `Erro na API (HTTP ${response.status}).`
+    );
+  }
+
+  if (!data?.reply) {
+    throw new Error(
+      "O servidor não retornou uma resposta da NEXA."
+    );
+  }
+
+  return data.reply;
+}
+
+composer.addEventListener("submit", async function (event) {
+  event.preventDefault();
+
+  const text = input.value.trim();
+
+  if (!text || sendButton.disabled) {
+    return;
+  }
+
+  addMessage(text, "user");
+
+  input.value = "";
+
+  sendButton.disabled = true;
+  micButton.disabled = true;
+
+  try {
+    const reply = await askNexa(text);
+
+    history.push({
+      role: "user",
+      text: text
+    });
+
+    history.push({
+      role: "model",
+      text: reply
+    });
+
+    addMessage(reply, "nexa");
+
+  } catch (error) {
+    console.error("NEXA error:", error);
+
+    addMessage(
+      "Erro ao conectar com a NEXA: " +
+      (error?.message || "erro desconhecido"),
+      "nexa"
+    );
+
+  } finally {
+    sendButton.disabled = false;
+    micButton.disabled = false;
+    input.focus();
+  }
+});
+
+micButton.addEventListener("click", function () {
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    addMessage(
+      "Seu navegador não disponibilizou reconhecimento de voz nesta versão.",
+      "nexa"
+    );
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+
+  recognition.lang = "pt-BR";
+  recognition.interimResults = false;
+
+  recognition.onstart = function () {
+    micButton.textContent = "●";
+    micButton.disabled = true;
+  };
+
+  recognition.onresult = function (event) {
+    input.value = event.results[0][0].transcript;
+    input.focus();
+  };
+
+  recognition.onerror = function () {
+    addMessage(
+      "Não consegui entender o áudio. Tente falar novamente.",
+      "nexa"
+    );
+  };
+
+  recognition.onend = function () {
+    micButton.textContent = "◉";
+    micButton.disabled = false;
+  };
+
+  recognition.start();
+});
