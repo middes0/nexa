@@ -1,10 +1,12 @@
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.8-flash";
 
 export async function onRequestPost(context) {
   try {
     if (!context.env.GEMINI_API_KEY) {
       return json(
-        { error: "GEMINI_API_KEY não está configurada no Cloudflare." },
+        {
+          error: "GEMINI_API_KEY não está configurada no Cloudflare."
+        },
         500
       );
     }
@@ -23,7 +25,9 @@ export async function onRequestPost(context) {
 
     if (!message) {
       return json(
-        { error: "Mensagem vazia." },
+        {
+          error: "Mensagem vazia."
+        },
         400
       );
     }
@@ -112,12 +116,16 @@ export async function onRequestPost(context) {
 
     if (!reply) {
       return json(
-        { error: "O Gemini não retornou uma resposta." },
+        {
+          error: "O Gemini não retornou uma resposta."
+        },
         502
       );
     }
 
-    return json({ reply });
+    return json({
+      reply
+    });
 
   } catch (error) {
     return json(
