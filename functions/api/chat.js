@@ -98,7 +98,7 @@ export async function onRequestPost(context) {
         {
           error:
             data?.error?.message ||
-            "A API Gemini retornou um erro."
+            `A API Gemini retornou HTTP ${response.status}.`
         },
         response.status
       );
@@ -121,7 +121,12 @@ export async function onRequestPost(context) {
 
   } catch (error) {
     return json(
-      { error: "Erro interno ao processar a mensagem." },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao processar a mensagem."
+      },
       500
     );
   }
@@ -133,10 +138,8 @@ function json(data, status = 200) {
     {
       status,
       headers: {
-        "Content-Type":
-          "application/json; charset=UTF-8"
+        "Content-Type": "application/json; charset=UTF-8"
       }
     }
   );
 }
-
