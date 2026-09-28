@@ -1,5 +1,8 @@
 const MODEL = "gemini-3.8-flash";
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1500;
+
 export async function onRequestPost(context) {
   try {
     if (!context.env.GEMINI_API_KEY) {
@@ -61,71 +64,107 @@ export async function onRequestPost(context) {
       }
     ];
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-      {
-        method: "POST",
+    let lastError = "Erro desconhecido.";
 
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": context.env.GEMINI_API_KEY
-        },
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+          {
+            method: "POST",
 
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  "Você é NEXA, um assistente pessoal digital. " +
-                  "Responda em português do Brasil, de forma clara, útil e natural. " +
-                  "Seja objetiva, mas explique quando necessário. " +
-                  "Não diga que é humana. " +
-                  "Você é uma inteligência artificial chamada NEXA."
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": context.env.GEMINI_API_KEY
+            },
+
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [
+                  {
+                    text:
+                      "Você é NEXA, um assistente pessoal digital. " +
+                      "Responda em português do Brasil, de forma clara, útil e natural. " +
+                      "Seja objetiva, mas explique quando necessário. " +
+                      "Não diga que é humana. " +
+                      "Você é uma inteligência artificial chamada NEXA."
+                  }
+                ]
+              },
+
+              contents,
+
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1000
               }
-            ]
-          },
-
-          contents,
-
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1000
+            })
           }
-        })
-      }
-    );
+        );
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-      return json(
-        {
-          error:
+        if (response.ok) {
+          const reply =
+            data?.candidates?.[0]?.content?.parts
+              ?.map((part) => part.text || "")
+              .join("")
+              .trim();
+
+          if (reply) {
+            return json({
+              reply
+            });
+          }
+
+          lastError = "O Gemini não retornou uma resposta.";
+        } else {
+          lastError =
             data?.error?.message ||
-            `A API Gemini retornou HTTP ${response.status}.`
-        },
-        response.status
-      );
+            `A API Gemini retornou HTTP ${response.status}.`;
+
+          const isTemporaryError =
+            response.status === 429 ||
+            response.status === 500 ||
+            response.status === 502 ||
+            response.status === 503 ||
+            response.status === 504 ||
+            lastError.toLowerCase().includes("high demand") ||
+            lastError.toLowerCase().includes("temporar");
+
+          if (!isTemporaryError) {
+            return json(
+              {
+                error: lastError
+              },
+              response.status
+            );
+          }
+        }
+
+      } catch (error) {
+        lastError =
+          error instanceof Error
+            ? error.message
+            : "Erro de conexão com o Gemini.";
+      }
+
+      if (attempt < MAX_RETRIES) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAY * attempt)
+        );
+      }
     }
 
-    const reply =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || "")
-        .join("")
-        .trim();
-
-    if (!reply) {
-      return json(
-        {
-          error: "O Gemini não retornou uma resposta."
-        },
-        502
-      );
-    }
-
-    return json({
-      reply
-    });
+    return json(
+      {
+        error:
+          "O Gemini está temporariamente sobrecarregado. " +
+          "A NEXA tentou novamente, mas o serviço ainda não respondeu. " +
+          "Tente enviar a mensagem novamente em alguns segundos."
+      },
+      503
+    );
 
   } catch (error) {
     return json(
