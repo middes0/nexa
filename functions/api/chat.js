@@ -1,12 +1,18 @@
-const GEMINI_MODEL = "gemini-3.8-flash";
-const OPENAI_MODEL = "gpt-5.6-luna";
+const GEMINI_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash"
+];
 
 const SYSTEM_PROMPT = `
 Você é a NEXA, assistente virtual do site.
 
-Responda em português do Brasil.
-Seja natural, objetiva e útil.
+Responda sempre em português do Brasil.
+Seja natural, clara e objetiva.
 Seu nome é NEXA.
+Ajude o visitante com dúvidas e informações.
+Não invente informações sobre produtos, preços ou funcionalidades.
 `;
 
 function json(data, status = 200) {
@@ -19,21 +25,9 @@ function json(data, status = 200) {
   });
 }
 
-async function askGemini(env, message, history) {
-  if (!env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY não encontrada no Cloudflare.");
-  }
-
-  const contents = [
-    ...history,
-    {
-      role: "user",
-      parts: [{ text: message }]
-    }
-  ];
-
+async function askGemini(env, model, message, history) {
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: {
@@ -42,9 +36,25 @@ async function askGemini(env, message, history) {
       },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }]
+          parts: [
+            {
+              text: SYSTEM_PROMPT
+            }
+          ]
         },
-        contents,
+
+        contents: [
+          ...history,
+          {
+            role: "user",
+            parts: [
+              {
+                text: message
+              }
+            ]
+          }
+        ],
+
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1000
@@ -57,90 +67,21 @@ async function askGemini(env, message, history) {
 
   if (!response.ok) {
     throw new Error(
-      `Gemini ${response.status}: ${
-        data?.error?.message || "erro desconhecido"
-      }`
+      data?.error?.message ||
+      `Gemini ${model} retornou HTTP ${response.status}`
     );
   }
 
-  const reply = data?.candidates?.[0]?.content?.parts
-    ?.map(part => part.text || "")
-    .join("")
-    .trim();
+  const reply =
+    data?.candidates?.[0]?.content?.parts
+      ?.map(part => part.text || "")
+      .join("")
+      .trim();
 
   if (!reply) {
-    throw new Error("Gemini não retornou texto.");
-  }
-
-  return reply;
-}
-
-async function askOpenAI(env, message, history) {
-  if (!env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY não encontrada no Cloudflare.");
-  }
-
-  const input = [
-    {
-      role: "developer",
-      content: SYSTEM_PROMPT
-    },
-
-    ...history.map(item => ({
-      role: item.role === "model" ? "assistant" : "user",
-      content: item.content
-    })),
-
-    {
-      role: "user",
-      content: message
-    }
-  ];
-
-  const response = await fetch(
-    "https://api.openai.com/v1/responses",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        input,
-        max_output_tokens: 1000
-      })
-    }
-  );
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
     throw new Error(
-      `OpenAI ${response.status}: ${
-        data?.error?.message || "erro desconhecido"
-      }`
+      `Gemini ${model} não retornou texto.`
     );
-  }
-
-  if (data?.output_text) {
-    return data.output_text.trim();
-  }
-
-  let reply = "";
-
-  for (const item of data?.output || []) {
-    for (const content of item?.content || []) {
-      if (typeof content?.text === "string") {
-        reply += content.text;
-      }
-    }
-  }
-
-  reply = reply.trim();
-
-  if (!reply) {
-    throw new Error("OpenAI não retornou texto.");
   }
 
   return reply;
@@ -148,9 +89,21 @@ async function askOpenAI(env, message, history) {
 
 export async function onRequestPost(context) {
   try {
+    if (!context.env.GEMINI_API_KEY) {
+      return json(
+        {
+          error: "GEMINI_API_KEY não está configurada."
+        },
+        500
+      );
+    }
+
     const body = await context.request.json();
 
-    const message = body?.message?.trim();
+    const message =
+      typeof body?.message === "string"
+        ? body.message.trim()
+        : "";
 
     if (!message) {
       return json(
@@ -161,74 +114,139 @@ export async function onRequestPost(context) {
       );
     }
 
-    const history = Array.isArray(body.history)
-      ? body.history.slice(-12)
+    const history = Array.isArray(body?.history)
+      ? body.history
+          .slice(-12)
+          .filter(item =>
+            item &&
+            typeof item.content === "string"
+          )
+          .map(item => ({
+            role:
+              item.role === "model" ||
+              item.role === "assistant"
+                ? "model"
+                : "user",
+            parts: [
+              {
+                text: item.content
+              }
+            ]
+          }))
       : [];
 
-    let geminiError = null;
+    let lastError = null;
 
-    // =========================
-    // TENTA GEMINI
-    // =========================
+    // Tenta os modelos Gemini em sequência
+    for (const model of GEMINI_MODELS) {
+      try {
+        console.log(`Tentando Gemini: ${model}`);
 
-    try {
-      const reply = await askGemini(
-        context.env,
-        message,
-        history
-      );
+        const reply = await askGemini(
+          context.env,
+          model,
+          message,
+          history
+        );
 
-      return json({
-        reply,
-        provider: "gemini"
-      });
+        return json({
+          reply,
+          provider: "gemini",
+          model
+        });
 
-    } catch (error) {
-      geminiError = error?.message || "Erro desconhecido";
+      } catch (error) {
+        lastError =
+          error?.message ||
+          "Erro desconhecido";
 
-      console.error(
-        "GEMINI FALHOU:",
-        geminiError
-      );
+        console.error(
+          `Gemini ${model} falhou:`,
+          lastError
+        );
+      }
     }
 
-    // =========================
-    // TENTA OPENAI
-    // =========================
+    // Se TODOS os Gemini falharem, tenta OpenAI
+    if (context.env.OPENAI_API_KEY) {
+      try {
+        const response = await fetch(
+          "https://api.openai.com/v1/responses",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization":
+                `Bearer ${context.env.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: "gpt-5.6-luna",
+              input: [
+                {
+                  role: "developer",
+                  content: SYSTEM_PROMPT
+                },
+                ...history.map(item => ({
+                  role:
+                    item.role === "model"
+                      ? "assistant"
+                      : "user",
+                  content:
+                    item.parts?.[0]?.text || ""
+                })),
+                {
+                  role: "user",
+                  content: message
+                }
+              ],
+              max_output_tokens: 1000
+            })
+          }
+        );
 
-    try {
-      const reply = await askOpenAI(
-        context.env,
-        message,
-        history
-      );
+        const data =
+          await response.json().catch(() => ({}));
 
-      return json({
-        reply,
-        provider: "openai"
-      });
+        if (!response.ok) {
+          throw new Error(
+            data?.error?.message ||
+            `OpenAI HTTP ${response.status}`
+          );
+        }
 
-    } catch (error) {
-      const openaiError =
-        error?.message || "Erro desconhecido";
+        const reply =
+          data?.output_text?.trim();
 
-      console.error(
-        "OPENAI FALHOU:",
-        openaiError
-      );
+        if (!reply) {
+          throw new Error(
+            "OpenAI não retornou texto."
+          );
+        }
 
-      return json(
-        {
-          error:
-            `Gemini: ${geminiError} | OpenAI: ${openaiError}`
-        },
-        503
-      );
+        return json({
+          reply,
+          provider: "openai"
+        });
+
+      } catch (openaiError) {
+        console.error(
+          "OpenAI também falhou:",
+          openaiError?.message
+        );
+      }
     }
+
+    return json(
+      {
+        error:
+          "Os modelos de IA estão temporariamente indisponíveis. Tente novamente em alguns segundos."
+      },
+      503
+    );
 
   } catch (error) {
     console.error(
-      "NEXA API:",
+      "NEXA ERROR:",
       error
     );
 
@@ -236,7 +254,7 @@ export async function onRequestPost(context) {
       {
         error:
           error?.message ||
-          "Erro interno."
+          "Erro interno da NEXA."
       },
       500
     );
