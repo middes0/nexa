@@ -36,16 +36,13 @@ Não prolongue respostas simples.
 `;
 
 function json(data, status = 200) {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "no-store"
-      }
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
     }
-  );
+  });
 }
 
 /* =========================================================
@@ -56,16 +53,13 @@ async function getMemories(db, userId) {
   if (!db) return [];
 
   try {
-    const result = await db
-      .prepare(`
-        SELECT memory
-        FROM memories
-        WHERE user_id = ?
-        ORDER BY id DESC
-        LIMIT 15
-      `)
-      .bind(userId)
-      .all();
+    const result = await db.prepare(`
+      SELECT memory
+      FROM memories
+      WHERE user_id = ?
+      ORDER BY id DESC
+      LIMIT 15
+    `).bind(userId).all();
 
     return (result.results || [])
       .map(row => row.memory)
@@ -74,7 +68,6 @@ async function getMemories(db, userId) {
           typeof memory === "string" &&
           memory.trim()
       );
-
   } catch (error) {
     console.error(
       "Erro ao buscar memórias:",
@@ -89,29 +82,20 @@ async function saveMemory(db, userId, memory) {
   if (!db || !memory) return;
 
   try {
-    const existing = await db
-      .prepare(`
-        SELECT id
-        FROM memories
-        WHERE user_id = ?
-        AND memory = ?
-        LIMIT 1
-      `)
-      .bind(userId, memory)
-      .first();
+    const existing = await db.prepare(`
+      SELECT id
+      FROM memories
+      WHERE user_id = ?
+      AND memory = ?
+      LIMIT 1
+    `).bind(userId, memory).first();
 
     if (existing) return;
 
-    await db
-      .prepare(`
-        INSERT INTO memories (
-          user_id,
-          memory
-        )
-        VALUES (?, ?)
-      `)
-      .bind(userId, memory)
-      .run();
+    await db.prepare(`
+      INSERT INTO memories (user_id, memory)
+      VALUES (?, ?)
+    `).bind(userId, memory).run();
 
   } catch (error) {
     console.error(
@@ -124,18 +108,16 @@ async function saveMemory(db, userId, memory) {
 function cleanMemory(text) {
   if (!text) return null;
 
-  const memory =
-    text
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
+  const memory = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
 
   if (!memory) return null;
 
-  const lower =
-    memory.toLowerCase();
+  const lower = memory.toLowerCase();
 
   const invalid = [
     "nenhuma",
@@ -170,18 +152,18 @@ function cleanMemory(text) {
 }
 
 async function extractMemory(env, message) {
-  if (!message) return null;
+  if (!message || !env.GEMINI_API_KEY) {
+    return null;
+  }
 
-  const nameMatch =
-    message.match(
-      /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
-    );
+  const nameMatch = message.match(
+    /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
+  );
 
   if (nameMatch) {
-    const name =
-      nameMatch[1]
-        .trim()
-        .replace(/\s+/g, " ");
+    const name = nameMatch[1]
+      .trim()
+      .replace(/\s+/g, " ");
 
     if (
       name.length >= 2 &&
@@ -191,8 +173,7 @@ async function extractMemory(env, message) {
     }
   }
 
-  const lower =
-    message.toLowerCase();
+  const lower = message.toLowerCase();
 
   const shouldAnalyze = [
     "eu gosto",
@@ -220,36 +201,28 @@ async function extractMemory(env, message) {
 
   if (!shouldAnalyze) return null;
 
-  if (!env.GEMINI_API_KEY) return null;
-
   try {
-    const response =
-      await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent`,
-        {
-          method: "POST",
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent`,
+      {
+        method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.GEMINI_API_KEY
+        },
 
-            "x-goog-api-key":
-              env.GEMINI_API_KEY
-          },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
 
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
+              parts: [
+                {
+                  text: `
+Extraia uma única informação pessoal estável desta mensagem.
 
-                parts: [
-                  {
-                    text: `
-Extraia uma única informação pessoal
-estável desta mensagem.
-
-Se houver uma informação válida,
-responda apenas com uma frase curta.
+Se houver uma informação válida, responda apenas com uma frase curta.
 
 Se não houver:
 NENHUMA
@@ -260,32 +233,29 @@ dados bancários ou informações sensíveis.
 Mensagem:
 ${message}
 `
-                  }
-                ]
-              }
-            ],
-
-            generationConfig: {
-              maxOutputTokens: 60
+                }
+              ]
             }
-          })
-        }
-      );
+          ],
+
+          generationConfig: {
+            maxOutputTokens: 60
+          }
+        })
+      }
+    );
 
     if (!response.ok) return null;
 
-    const data =
-      await response
-        .json()
-        .catch(() => ({}));
+    const data = await response
+      .json()
+      .catch(() => ({}));
 
     const result =
       data?.candidates?.[0]
         ?.content
         ?.parts
-        ?.map(
-          part => part.text || ""
-        )
+        ?.map(part => part.text || "")
         .join("")
         .trim();
 
@@ -297,7 +267,7 @@ ${message}
 }
 
 /* =========================================================
-   GEMINI REQUEST
+   GEMINI
 ========================================================= */
 
 function createGeminiRequest(
@@ -308,9 +278,8 @@ function createGeminiRequest(
   memories,
   signal
 ) {
-  const memoryText =
-    memories.length
-      ? `
+  const memoryText = memories.length
+    ? `
 MEMÓRIAS DO USUÁRIO:
 
 ${memories
@@ -320,27 +289,19 @@ ${memories
   )
   .join("\n")}
 `
-      : "";
-
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+    : "";
 
   return fetch(
-    url,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
     {
       method: "POST",
 
       signal,
 
       headers: {
-        "Content-Type":
-          "application/json",
-
-        "Accept":
-          "text/event-stream",
-
-        "x-goog-api-key":
-          env.GEMINI_API_KEY
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "x-goog-api-key": env.GEMINI_API_KEY
       },
 
       body: JSON.stringify({
@@ -381,276 +342,105 @@ ${memories
 }
 
 /* =========================================================
-   TRANSFORMA RESPONSE DO GEMINI EM SSE DA NEXA
+   PARSER SSE
 ========================================================= */
 
-function convertGeminiStream(
-  response,
-  model,
-  context,
-  message,
-  userId
-) {
-  const encoder =
-    new TextEncoder();
+function parseSSEEvent(event) {
+  let text = "";
+  let error = null;
 
-  const decoder =
-    new TextDecoder();
-
-  const {
-    readable,
-    writable
-  } =
-    new TransformStream();
-
-  const writer =
-    writable.getWriter();
-
-  const reader =
-    response.body.getReader();
-
-  let buffer = "";
-  let fullReply = "";
-
-  async function sendEvent(data) {
-    await writer.write(
-      encoder.encode(
-        `data: ${JSON.stringify(data)}\n\n`
-      )
-    );
-  }
-
-  async function processData(
-    dataText
+  for (
+    const line of event.split(/\r?\n/)
   ) {
-    if (!dataText) return;
+    const trimmed = line.trim();
 
-    if (dataText === "[DONE]") {
-      return;
+    if (!trimmed.startsWith("data:")) {
+      continue;
     }
 
-    let data;
+    const dataText =
+      trimmed
+        .slice(5)
+        .trim();
+
+    if (
+      !dataText ||
+      dataText === "[DONE]"
+    ) {
+      continue;
+    }
 
     try {
-      data =
+      const data =
         JSON.parse(dataText);
-    } catch {
-      return;
-    }
 
-    if (data?.error) {
-      throw new Error(
-        data.error.message ||
-        "Erro retornado pelo Gemini."
-      );
-    }
+      if (data?.error) {
+        error =
+          data.error.message ||
+          "Erro retornado pelo Gemini.";
 
-    const candidates =
-      Array.isArray(
-        data?.candidates
-      )
-        ? data.candidates
-        : [];
+        continue;
+      }
 
-    for (
-      const candidate
-      of candidates
-    ) {
-      const parts =
+      const candidates =
         Array.isArray(
-          candidate?.content?.parts
+          data?.candidates
         )
-          ? candidate.content.parts
+          ? data.candidates
           : [];
 
       for (
-        const part
-        of parts
+        const candidate
+        of candidates
       ) {
-        if (
-          part?.thought === true
-        ) {
-          continue;
-        }
-
-        if (
-          typeof part?.text !==
-          "string"
-        ) {
-          continue;
-        }
-
-        if (!part.text) {
-          continue;
-        }
-
-        fullReply +=
-          part.text;
-
-        await sendEvent({
-          type: "text",
-          text: part.text
-        });
-      }
-    }
-  }
-
-  async function processSSE(event) {
-    const lines =
-      event.split(/\r?\n/);
-
-    for (
-      const line
-      of lines
-    ) {
-      const trimmed =
-        line.trim();
-
-      if (!trimmed) continue;
-
-      if (
-        trimmed.startsWith(":")
-      ) {
-        continue;
-      }
-
-      if (
-        !trimmed.startsWith("data:")
-      ) {
-        continue;
-      }
-
-      const dataText =
-        trimmed
-          .slice(5)
-          .trim();
-
-      if (!dataText) continue;
-
-      await processData(
-        dataText
-      );
-    }
-  }
-
-  (async () => {
-    try {
-      while (true) {
-        const {
-          value,
-          done
-        } =
-          await reader.read();
-
-        if (done) break;
-
-        buffer +=
-          decoder.decode(
-            value,
-            {
-              stream: true
-            }
-          );
-
-        const events =
-          buffer.split(
-            /\r?\n\r?\n/
-          );
-
-        buffer =
-          events.pop() || "";
+        const parts =
+          Array.isArray(
+            candidate?.content?.parts
+          )
+            ? candidate.content.parts
+            : [];
 
         for (
-          const event
-          of events
+          const part
+          of parts
         ) {
-          await processSSE(
-            event
-          );
+          if (
+            part?.thought === true
+          ) {
+            continue;
+          }
+
+          if (
+            typeof part?.text !==
+            "string"
+          ) {
+            continue;
+          }
+
+          if (!part.text) {
+            continue;
+          }
+
+          text += part.text;
         }
       }
 
-      buffer +=
-        decoder.decode();
-
-      if (buffer.trim()) {
-        await processSSE(
-          buffer
-        );
-      }
-
-      if (!fullReply.trim()) {
-        throw new Error(
-          "O modelo encerrou o stream sem retornar texto."
-        );
-      }
-
-      /*
-        Memória é processada depois,
-        sem bloquear a resposta.
-      */
-
-      if (
-        context.waitUntil &&
-        context.env.DB
-      ) {
-        context.waitUntil(
-          (async () => {
-            const memory =
-              await extractMemory(
-                context.env,
-                message
-              );
-
-            if (memory) {
-              await saveMemory(
-                context.env.DB,
-                userId,
-                memory
-              );
-            }
-          })()
-        );
-      }
-
-      await sendEvent({
-        type: "done",
-        provider: "gemini",
-        model
-      });
-
-      await writer.close();
-
-    } catch (error) {
-      console.error(
-        `Erro no stream ${model}:`,
-        error?.message
-      );
-
-      try {
-        await sendEvent({
-          type: "error",
-          error:
-            error?.message ||
-            "Erro durante a resposta."
-        });
-
-        await writer.close();
-
-      } catch {
-        // Stream encerrado.
-      }
+    } catch {
+      // Ignora eventos SSE inválidos.
     }
-  })();
+  }
 
-  return readable;
+  return {
+    text,
+    error
+  };
 }
 
 /* =========================================================
-   TESTA MODELO
+   ESPERA O PRIMEIRO TEXTO
 ========================================================= */
 
-async function testModel(
+async function waitForFirstText(
   env,
   model,
   message,
@@ -696,7 +486,287 @@ async function testModel(
     throw error;
   }
 
-  return response;
+  const reader =
+    response.body.getReader();
+
+  const decoder =
+    new TextDecoder();
+
+  let buffer = "";
+
+  while (true) {
+    const {
+      value,
+      done
+    } = await reader.read();
+
+    if (done) break;
+
+    buffer +=
+      decoder.decode(
+        value,
+        {
+          stream: true
+        }
+      );
+
+    const events =
+      buffer.split(
+        /\r?\n\r?\n/
+      );
+
+    buffer =
+      events.pop() || "";
+
+    for (
+      const event
+      of events
+    ) {
+      const parsed =
+        parseSSEEvent(event);
+
+      if (parsed.error) {
+        throw new Error(
+          parsed.error
+        );
+      }
+
+      if (parsed.text) {
+        return {
+          model,
+          reader,
+          decoder,
+          buffer,
+          firstText:
+            parsed.text
+        };
+      }
+    }
+  }
+
+  buffer +=
+    decoder.decode();
+
+  const parsed =
+    parseSSEEvent(buffer);
+
+  if (parsed.error) {
+    throw new Error(
+      parsed.error
+    );
+  }
+
+  if (parsed.text) {
+    return {
+      model,
+      reader,
+      decoder,
+      buffer: "",
+      firstText:
+        parsed.text
+    };
+  }
+
+  throw new Error(
+    `O modelo ${model} encerrou sem retornar texto.`
+  );
+}
+
+/* =========================================================
+   STREAM PARA O FRONTEND
+========================================================= */
+
+function createClientStream(
+  winner,
+  context,
+  message,
+  userId
+) {
+  const encoder =
+    new TextEncoder();
+
+  const {
+    readable,
+    writable
+  } =
+    new TransformStream();
+
+  const writer =
+    writable.getWriter();
+
+  (async () => {
+    try {
+      let buffer =
+        winner.buffer || "";
+
+      let fullReply =
+        winner.firstText || "";
+
+      await writer.write(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "text",
+            text: winner.firstText
+          })}\n\n`
+        )
+      );
+
+      const reader =
+        winner.reader;
+
+      const decoder =
+        winner.decoder;
+
+      while (true) {
+        const {
+          value,
+          done
+        } = await reader.read();
+
+        if (done) break;
+
+        buffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true
+            }
+          );
+
+        const events =
+          buffer.split(
+            /\r?\n\r?\n/
+          );
+
+        buffer =
+          events.pop() || "";
+
+        for (
+          const event
+          of events
+        ) {
+          const parsed =
+            parseSSEEvent(event);
+
+          if (parsed.error) {
+            throw new Error(
+              parsed.error
+            );
+          }
+
+          if (parsed.text) {
+            fullReply +=
+              parsed.text;
+
+            await writer.write(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "text",
+                  text: parsed.text
+                })}\n\n`
+              )
+            );
+          }
+        }
+      }
+
+      buffer +=
+        decoder.decode();
+
+      if (buffer.trim()) {
+        const parsed =
+          parseSSEEvent(buffer);
+
+        if (parsed.error) {
+          throw new Error(
+            parsed.error
+          );
+        }
+
+        if (parsed.text) {
+          fullReply +=
+            parsed.text;
+
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "text",
+                text: parsed.text
+              })}\n\n`
+            )
+          );
+        }
+      }
+
+      if (!fullReply.trim()) {
+        throw new Error(
+          "O modelo encerrou o stream sem retornar texto."
+        );
+      }
+
+      /* Memória não bloqueia a resposta. */
+      if (
+        context.waitUntil &&
+        context.env.DB
+      ) {
+        context.waitUntil(
+          (async () => {
+            const memory =
+              await extractMemory(
+                context.env,
+                message
+              );
+
+            if (memory) {
+              await saveMemory(
+                context.env.DB,
+                userId,
+                memory
+              );
+            }
+          })()
+        );
+      }
+
+      await writer.write(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "done",
+            provider: "gemini",
+            model: winner.model
+          })}\n\n`
+        )
+      );
+
+      await writer.close();
+
+    } catch (error) {
+      console.error(
+        `Erro no stream ${winner.model}:`,
+        error?.message
+      );
+
+      try {
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "error",
+              error:
+                error?.message ||
+                "Erro durante a resposta."
+            })}\n\n`
+          )
+        );
+
+        await writer.close();
+
+      } catch {
+        // Stream já encerrado.
+      }
+    }
+  })();
+
+  return readable;
 }
 
 /* =========================================================
@@ -789,57 +859,42 @@ export async function onRequestPost(
 
     /*
       =====================================================
-      FALLBACK PARALELO
+      FALLBACK POR PRIMEIRO TEXTO
       =====================================================
 
-      Os três modelos começam juntos.
+      Os três modelos são iniciados ao mesmo tempo.
 
-      O primeiro que retornar HTTP 200
-      vence.
+      O vencedor NÃO é o primeiro HTTP 200.
 
-      Os outros são abortados.
+      O vencedor é o primeiro que realmente
+      entregar texto no stream.
     */
 
     const controllers =
       MODELS.map(
-        () => new AbortController()
+        () =>
+          new AbortController()
       );
-
-    let winner = null;
 
     const attempts =
       MODELS.map(
         (model, index) =>
-          testModel(
+          waitForFirstText(
             context.env,
             model,
             message,
             history,
             memories,
             controllers[index].signal
+          ).then(
+            result => ({
+              ...result,
+              index
+            })
           )
-            .then(
-              response => ({
-                model,
-                response,
-                index
-              })
-            )
-            .catch(
-              error => {
-                throw {
-                  model,
-                  error,
-                  index
-                };
-              }
-            )
       );
 
-    /*
-      Promise.any espera o primeiro
-      modelo que realmente respondeu.
-    */
+    let winner = null;
 
     try {
       winner =
@@ -855,8 +910,10 @@ export async function onRequestPost(
     }
 
     /*
-      Se algum modelo respondeu,
-      aborta os outros imediatamente.
+      Um modelo realmente começou
+      a responder.
+
+      Cancela os outros.
     */
 
     if (winner) {
@@ -873,20 +930,16 @@ export async function onRequestPost(
       }
 
       console.log(
-        `NEXA escolheu ${winner.model} em ${Date.now() - start}ms`
+        `NEXA recebeu o primeiro texto de ${winner.model} em ${Date.now() - start}ms`
       );
 
-      const stream =
-        convertGeminiStream(
-          winner.response,
-          winner.model,
+      return new Response(
+        createClientStream(
+          winner,
           context,
           message,
           userId
-        );
-
-      return new Response(
-        stream,
+        ),
         {
           status: 200,
 
@@ -911,9 +964,6 @@ export async function onRequestPost(
       =====================================================
       ÚLTIMO FALLBACK
       =====================================================
-
-      Se 3.8 + 3.7 + 3.6 falharem,
-      tenta o 3.5 Flash-Lite.
     */
 
     console.log(
@@ -925,8 +975,8 @@ export async function onRequestPost(
       const controller =
         new AbortController();
 
-      const response =
-        await testModel(
+      const fallback =
+        await waitForFirstText(
           context.env,
           LAST_FALLBACK,
           message,
@@ -935,21 +985,16 @@ export async function onRequestPost(
           controller.signal
         );
 
-      console.log(
-        `NEXA escolheu ${LAST_FALLBACK} em ${Date.now() - start}ms`
-      );
-
-      const stream =
-        convertGeminiStream(
-          response,
-          LAST_FALLBACK,
+      return new Response(
+        createClientStream(
+          {
+            ...fallback,
+            index: -1
+          },
           context,
           message,
           userId
-        );
-
-      return new Response(
-        stream,
+        ),
         {
           status: 200,
 
