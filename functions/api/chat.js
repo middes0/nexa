@@ -1,9 +1,11 @@
+````javascript
 const MODELS = [
   "gemini-3.8-flash",
   "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash-lite"
+  "gemini-3.6-flash"
 ];
+
+const LAST_FALLBACK = "gemini-3.5-flash-lite";
 
 const SYSTEM_PROMPT = `
 Você é NEXA.
@@ -51,9 +53,7 @@ function json(data, status = 200) {
 ========================================================= */
 
 async function getMemories(db, userId) {
-  if (!db) {
-    return [];
-  }
+  if (!db) return [];
 
   try {
     const result = await db
@@ -86,9 +86,7 @@ async function getMemories(db, userId) {
 }
 
 async function saveMemory(db, userId, memory) {
-  if (!db || !memory) {
-    return;
-  }
+  if (!db || !memory) return;
 
   try {
     const existing = await db
@@ -102,9 +100,7 @@ async function saveMemory(db, userId, memory) {
       .bind(userId, memory)
       .first();
 
-    if (existing) {
-      return;
-    }
+    if (existing) return;
 
     await db
       .prepare(`
@@ -126,9 +122,7 @@ async function saveMemory(db, userId, memory) {
 }
 
 function cleanMemory(text) {
-  if (!text) {
-    return null;
-  }
+  if (!text) return null;
 
   const memory =
     text
@@ -138,9 +132,7 @@ function cleanMemory(text) {
       .replace(/```$/i, "")
       .trim();
 
-  if (!memory) {
-    return null;
-  }
+  if (!memory) return null;
 
   const lower =
     memory.toLowerCase();
@@ -161,8 +153,7 @@ function cleanMemory(text) {
 
   if (
     invalid.some(
-      value =>
-        lower.includes(value)
+      value => lower.includes(value)
     )
   ) {
     return null;
@@ -179,9 +170,7 @@ function cleanMemory(text) {
 }
 
 async function extractMemory(env, message) {
-  if (!message) {
-    return null;
-  }
+  if (!message) return null;
 
   const nameMatch =
     message.match(
@@ -226,22 +215,17 @@ async function extractMemory(env, message) {
     "quero que você lembre",
     "quero que voce lembre"
   ].some(
-    phrase =>
-      lower.includes(phrase)
+    phrase => lower.includes(phrase)
   );
 
-  if (!shouldAnalyze) {
-    return null;
-  }
+  if (!shouldAnalyze) return null;
 
-  if (!env.GEMINI_API_KEY) {
-    return null;
-  }
+  if (!env.GEMINI_API_KEY) return null;
 
   try {
     const response =
       await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent`,
         {
           method: "POST",
 
@@ -288,24 +272,19 @@ ${message}
         }
       );
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const data =
       await response
         .json()
-        .catch(
-          () => ({})
-        );
+        .catch(() => ({}));
 
     const result =
       data?.candidates?.[0]
         ?.content
         ?.parts
         ?.map(
-          part =>
-            part.text || ""
+          part => part.text || ""
         )
         .join("")
         .trim();
@@ -318,31 +297,16 @@ ${message}
 }
 
 /* =========================================================
-   FALLBACK
+   GEMINI REQUEST
 ========================================================= */
 
-function shouldFallback(status) {
-  return [
-    429,
-    500,
-    502,
-    503,
-    504
-  ].includes(status);
-}
-
-/* =========================================================
-   GEMINI STREAM
-========================================================= */
-
-async function createGeminiStream(
+function createGeminiRequest(
   env,
   model,
   message,
   history,
   memories,
-  context,
-  userId
+  signal
 ) {
   const memoryText =
     memories.length
@@ -361,106 +325,72 @@ ${memories
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
-  console.log(
-    `NEXA tentando modelo: ${model}`
-  );
+  return fetch(
+    url,
+    {
+      method: "POST",
 
-  const response =
-    await fetch(
-      url,
-      {
-        method: "POST",
+      signal,
 
-        headers: {
-          "Content-Type":
-            "application/json",
+      headers: {
+        "Content-Type":
+          "application/json",
 
-          "Accept":
-            "text/event-stream",
+        "Accept":
+          "text/event-stream",
 
-          "x-goog-api-key":
-            env.GEMINI_API_KEY
+        "x-goog-api-key":
+          env.GEMINI_API_KEY
+      },
+
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text:
+                SYSTEM_PROMPT +
+                memoryText
+            }
+          ]
         },
 
-        body: JSON.stringify({
-          systemInstruction: {
+        contents: [
+          ...history,
+
+          {
+            role: "user",
+
             parts: [
               {
-                text:
-                  SYSTEM_PROMPT +
-                  memoryText
+                text: message
               }
             ]
-          },
-
-          contents: [
-            ...history,
-
-            {
-              role: "user",
-
-              parts: [
-                {
-                  text: message
-                }
-              ]
-            }
-          ],
-
-          generationConfig: {
-            maxOutputTokens: 400,
-
-            thinkingConfig: {
-              thinkingLevel: "low"
-            }
           }
-        })
-      }
-    );
+        ],
 
-  /*
-    IMPORTANTE:
+        generationConfig: {
+          maxOutputTokens: 300,
 
-    Este erro acontece ANTES de criarmos
-    o stream para o navegador.
+          thinkingConfig: {
+            thinkingLevel: "low"
+          }
+        }
+      })
+    }
+  );
+}
 
-    Portanto o onRequestPost consegue
-    capturar o 503 e tentar o próximo modelo.
-  */
+/* =========================================================
+   TRANSFORMA RESPONSE DO GEMINI EM SSE DA NEXA
+========================================================= */
 
-  if (!response.ok) {
-    const errorText =
-      await response
-        .text()
-        .catch(() => "");
-
-    console.error(
-      `Gemini ${model} HTTP ${response.status}:`,
-      errorText
-    );
-
-    const error =
-      new Error(
-        `Gemini HTTP ${response.status}: ${errorText}`
-      );
-
-    error.status =
-      response.status;
-
-    throw error;
-  }
-
-  if (!response.body) {
-    const error =
-      new Error(
-        `Gemini ${model} não retornou um stream.`
-      );
-
-    error.status = 503;
-
-    throw error;
-  }
-
+function convertGeminiStream(
+  response,
+  model,
+  context,
+  message,
+  userId
+) {
   const encoder =
     new TextEncoder();
 
@@ -490,16 +420,12 @@ ${memories
     );
   }
 
-  async function processGeminiData(
+  async function processData(
     dataText
   ) {
-    if (!dataText) {
-      return;
-    }
+    if (!dataText) return;
 
-    if (
-      dataText === "[DONE]"
-    ) {
+    if (dataText === "[DONE]") {
       return;
     }
 
@@ -508,23 +434,15 @@ ${memories
     try {
       data =
         JSON.parse(dataText);
-
     } catch {
-      console.error(
-        "JSON inválido recebido do Gemini:",
-        dataText
-      );
-
       return;
     }
 
     if (data?.error) {
-      console.error(
-        `Erro interno do Gemini ${model}:`,
-        data.error
+      throw new Error(
+        data.error.message ||
+        "Erro retornado pelo Gemini."
       );
-
-      return;
     }
 
     const candidates =
@@ -557,7 +475,7 @@ ${memories
 
         if (
           typeof part?.text !==
-            "string"
+          "string"
         ) {
           continue;
         }
@@ -577,9 +495,7 @@ ${memories
     }
   }
 
-  async function processSSE(
-    event
-  ) {
+  async function processSSE(event) {
     const lines =
       event.split(/\r?\n/);
 
@@ -590,9 +506,7 @@ ${memories
       const trimmed =
         line.trim();
 
-      if (!trimmed) {
-        continue;
-      }
+      if (!trimmed) continue;
 
       if (
         trimmed.startsWith(":")
@@ -601,9 +515,7 @@ ${memories
       }
 
       if (
-        !trimmed.startsWith(
-          "data:"
-        )
+        !trimmed.startsWith("data:")
       ) {
         continue;
       }
@@ -613,21 +525,13 @@ ${memories
           .slice(5)
           .trim();
 
-      if (!dataText) {
-        continue;
-      }
+      if (!dataText) continue;
 
-      await processGeminiData(
+      await processData(
         dataText
       );
     }
   }
-
-  /*
-    O stream já foi aceito pelo Gemini.
-    A partir daqui enviamos os tokens
-    normalmente para o navegador.
-  */
 
   (async () => {
     try {
@@ -638,9 +542,7 @@ ${memories
         } =
           await reader.read();
 
-        if (done) {
-          break;
-        }
+        if (done) break;
 
         buffer +=
           decoder.decode(
@@ -679,12 +581,13 @@ ${memories
 
       if (!fullReply.trim()) {
         throw new Error(
-          `O modelo ${model} encerrou o stream sem retornar texto.`
+          "O modelo encerrou o stream sem retornar texto."
         );
       }
 
       /*
-        Salva memória em segundo plano.
+        Memória é processada depois,
+        sem bloquear a resposta.
       */
 
       if (
@@ -712,38 +615,30 @@ ${memories
 
       await sendEvent({
         type: "done",
-
-        provider:
-          "gemini",
-
+        provider: "gemini",
         model
       });
 
       await writer.close();
 
-      console.log(
-        `NEXA respondeu usando ${model}`
-      );
-
     } catch (error) {
       console.error(
-        `Erro durante stream ${model}:`,
+        `Erro no stream ${model}:`,
         error?.message
       );
 
       try {
         await sendEvent({
           type: "error",
-
           error:
             error?.message ||
-            "Erro durante a resposta da NEXA."
+            "Erro durante a resposta."
         });
 
         await writer.close();
 
       } catch {
-        // Stream já fechado.
+        // Stream encerrado.
       }
     }
   })();
@@ -752,7 +647,60 @@ ${memories
 }
 
 /* =========================================================
-   POST /api/chat
+   TESTA MODELO
+========================================================= */
+
+async function testModel(
+  env,
+  model,
+  message,
+  history,
+  memories,
+  signal
+) {
+  const response =
+    await createGeminiRequest(
+      env,
+      model,
+      message,
+      history,
+      memories,
+      signal
+    );
+
+  if (!response.ok) {
+    const errorText =
+      await response
+        .text()
+        .catch(() => "");
+
+    const error =
+      new Error(
+        `Gemini ${model} HTTP ${response.status}: ${errorText}`
+      );
+
+    error.status =
+      response.status;
+
+    throw error;
+  }
+
+  if (!response.body) {
+    const error =
+      new Error(
+        `Gemini ${model} não retornou stream.`
+      );
+
+    error.status = 503;
+
+    throw error;
+  }
+
+  return response;
+}
+
+/* =========================================================
+   POST
 ========================================================= */
 
 export async function onRequestPost(
@@ -839,103 +787,202 @@ export async function onRequestPost(
         userId
       );
 
-    let lastError =
-      null;
-
     /*
-      FALLBACK REAL
+      =====================================================
+      FALLBACK PARALELO
+      =====================================================
 
-      3.8
-        ↓ 503
-      3.7
-        ↓ 503
-      3.6
-        ↓ 503
-      3.5 Flash-Lite
+      Os três modelos começam juntos.
+
+      O primeiro que retornar HTTP 200
+      vence.
+
+      Os outros são abortados.
     */
 
-    for (
-      const model
-      of MODELS
-    ) {
-      try {
-        const stream =
-          await createGeminiStream(
+    const controllers =
+      MODELS.map(
+        () => new AbortController()
+      );
+
+    let winner = null;
+
+    const attempts =
+      MODELS.map(
+        (model, index) =>
+          testModel(
             context.env,
             model,
             message,
             history,
             memories,
-            context,
-            userId
-          );
-
-        console.log(
-          `NEXA iniciou ${model} em ${Date.now() - start}ms`
-        );
-
-        return new Response(
-          stream,
-          {
-            status: 200,
-
-            headers: {
-              "Content-Type":
-                "text/event-stream; charset=utf-8",
-
-              "Cache-Control":
-                "no-cache, no-store, must-revalidate",
-
-              "Connection":
-                "keep-alive",
-
-              "X-Accel-Buffering":
-                "no"
-            }
-          }
-        );
-
-      } catch (error) {
-        lastError =
-          error;
-
-        console.error(
-          `${model} falhou:`,
-          error?.message
-        );
-
-        /*
-          Só tenta o próximo modelo
-          quando for um erro temporário
-          de disponibilidade/capacidade.
-        */
-
-        if (
-          !shouldFallback(
-            error?.status
+            controllers[index].signal
           )
-        ) {
-          break;
-        }
+            .then(
+              response => ({
+                model,
+                response,
+                index
+              })
+            )
+            .catch(
+              error => {
+                throw {
+                  model,
+                  error,
+                  index
+                };
+              }
+            )
+      );
 
-        console.log(
-          `FALLBACK: ${model} indisponível.`
+    /*
+      Promise.any espera o primeiro
+      modelo que realmente respondeu.
+    */
+
+    try {
+      winner =
+        await Promise.any(
+          attempts
         );
-      }
+
+    } catch (aggregate) {
+      console.error(
+        "Todos os modelos principais falharam:",
+        aggregate
+      );
     }
 
     /*
-      Nenhum modelo conseguiu responder.
+      Se algum modelo respondeu,
+      aborta os outros imediatamente.
     */
 
-    return json(
-      {
-        error:
-          lastError?.message ||
-          "Todos os modelos Gemini estão indisponíveis no momento."
-      },
-      502
+    if (winner) {
+      for (
+        let i = 0;
+        i < controllers.length;
+        i++
+      ) {
+        if (
+          i !== winner.index
+        ) {
+          controllers[i].abort();
+        }
+      }
+
+      console.log(
+        `NEXA escolheu ${winner.model} em ${Date.now() - start}ms`
+      );
+
+      const stream =
+        convertGeminiStream(
+          winner.response,
+          winner.model,
+          context,
+          message,
+          userId
+        );
+
+      return new Response(
+        stream,
+        {
+          status: 200,
+
+          headers: {
+            "Content-Type":
+              "text/event-stream; charset=utf-8",
+
+            "Cache-Control":
+              "no-cache, no-store, must-revalidate",
+
+            "Connection":
+              "keep-alive",
+
+            "X-Accel-Buffering":
+              "no"
+          }
+        }
+      );
+    }
+
+    /*
+      =====================================================
+      ÚLTIMO FALLBACK
+      =====================================================
+
+      Se 3.8 + 3.7 + 3.6 falharem,
+      tenta o 3.5 Flash-Lite.
+    */
+
+    console.log(
+      "Tentando último fallback:",
+      LAST_FALLBACK
     );
+
+    try {
+      const controller =
+        new AbortController();
+
+      const response =
+        await testModel(
+          context.env,
+          LAST_FALLBACK,
+          message,
+          history,
+          memories,
+          controller.signal
+        );
+
+      console.log(
+        `NEXA escolheu ${LAST_FALLBACK} em ${Date.now() - start}ms`
+      );
+
+      const stream =
+        convertGeminiStream(
+          response,
+          LAST_FALLBACK,
+          context,
+          message,
+          userId
+        );
+
+      return new Response(
+        stream,
+        {
+          status: 200,
+
+          headers: {
+            "Content-Type":
+              "text/event-stream; charset=utf-8",
+
+            "Cache-Control":
+              "no-cache, no-store, must-revalidate",
+
+            "Connection":
+              "keep-alive",
+
+            "X-Accel-Buffering":
+              "no"
+          }
+        }
+      );
+
+    } catch (error) {
+      console.error(
+        "Último fallback também falhou:",
+        error?.message
+      );
+
+      return json(
+        {
+          error:
+            "Todos os modelos Gemini estão indisponíveis no momento."
+        },
+        503
+      );
+    }
 
   } catch (error) {
     console.error(
@@ -953,3 +1000,4 @@ export async function onRequestPost(
     );
   }
 }
+````
