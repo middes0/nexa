@@ -1,4 +1,3 @@
-````javascript
 const MODELS = [
   "gemini-3.8-flash",
   "gemini-3.7-flash",
@@ -1045,4 +1044,3 @@ export async function onRequestPost(
     );
   }
 }
-````
