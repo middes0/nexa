@@ -1,37 +1,180 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#05070a">
-<title>NEXA</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#07050B"
+  >
+
+  <meta
+    name="description"
+    content="NEXA — assistente pessoal inteligente"
+  >
+
+  <title>NEXA</title>
+
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-<main class="app">
-<header class="topbar">
-<div class="brand"><div class="orb"></div><div><h1>NEXA</h1><span>Assistente pessoal</span></div></div>
-<div class="topbar-actions">
-  <span class="status"><i></i> Online</span>
-  <button type="button" id="newChatButton" class="new-chat-button">
-    Nova conversa
-  </button>
-</div>
-</header>
-<section class="hero">
-<div class="core"><div class="core-ring"></div><div class="core-dot"></div></div>
-<h2>Olá. Eu sou a NEXA.</h2>
-<p>Seu assistente pessoal está pronto para começar.</p>
-</section>
-<section class="chat" id="chat">
-<div class="message nexa"><span class="label">NEXA</span><p>E aí. Sou a NEXA. Já tô online — manda a boa.</p></div>
-</section>
-<form class="composer" id="composer">
-<input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off">
-<button type="button" id="micButton" aria-label="Microfone">◉</button>
-<button type="submit" aria-label="Enviar">➤</button>
-</form>
-<footer>NEXA v0.2 • Gemini conectado via Cloudflare</footer>
-</main><script src="script.js?v=2"></script>
+
+  <main class="app">
+
+    <!-- =========================
+         BARRA SUPERIOR
+    ========================== -->
+
+    <header class="topbar">
+
+      <div class="brand">
+
+        <div class="orb">
+          <div class="orb-inner"></div>
+        </div>
+
+        <div class="brand-info">
+          <h1>NEXA</h1>
+          <span>Assistente pessoal</span>
+        </div>
+
+      </div>
+
+
+      <div class="topbar-actions">
+
+        <span class="status">
+          <i></i>
+          Online
+        </span>
+
+        <button
+          type="button"
+          id="newChatButton"
+          class="new-chat-button"
+        >
+          Nova conversa
+        </button>
+
+      </div>
+
+    </header>
+
+
+    <!-- =========================
+         ÁREA PRINCIPAL / HERO
+    ========================== -->
+
+    <section class="hero">
+
+      <div class="core">
+
+        <div class="core-glow"></div>
+
+        <div class="core-ring"></div>
+
+        <div class="core-ring core-ring-two"></div>
+
+        <div class="core-dot"></div>
+
+      </div>
+
+
+      <h2>
+        Olá. Eu sou a NEXA.
+      </h2>
+
+      <p>
+        Seu assistente pessoal está pronto para começar.
+      </p>
+
+    </section>
+
+
+    <!-- =========================
+         CHAT
+    ========================== -->
+
+    <section
+      class="chat"
+      id="chat"
+      aria-live="polite"
+      aria-label="Conversa com a NEXA"
+    >
+
+      <div class="message nexa">
+
+        <span class="label">
+          NEXA
+        </span>
+
+        <p>
+          E aí. Sou a NEXA. Já tô online — manda a boa.
+        </p>
+
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         COMPOSITOR
+    ========================== -->
+
+    <form
+      class="composer"
+      id="composer"
+      autocomplete="off"
+    >
+
+      <input
+        id="messageInput"
+        type="text"
+        placeholder="Digite uma mensagem..."
+        autocomplete="off"
+        aria-label="Mensagem"
+      >
+
+      <button
+        type="button"
+        id="micButton"
+        aria-label="Microfone"
+        title="Falar"
+      >
+        ◉
+      </button>
+
+      <button
+        type="submit"
+        aria-label="Enviar"
+        title="Enviar mensagem"
+      >
+        ➤
+      </button>
+
+    </form>
+
+
+    <!-- =========================
+         RODAPÉ
+    ========================== -->
+
+    <footer>
+      NEXA v0.2 • Gemini conectado via Cloudflare
+    </footer>
+
+  </main>
+
+
+  <script src="script.js?v=2"></script>
+
 </body>
+
 </html>
