@@ -1,4 +1,3 @@
-```javascript
 const composer = document.getElementById("composer");
 const input = document.getElementById("messageInput");
 const chat = document.getElementById("chat");
@@ -85,7 +84,6 @@ function addAnimatedMessage(text) {
   chat.appendChild(message);
 
   let index = 0;
-
   const speed = 18;
 
   function typeNextCharacter() {
@@ -109,7 +107,6 @@ function addAnimatedMessage(text) {
 
 function clearConversation() {
   history.length = 0;
-
   hideTyping();
 
   chat.innerHTML = `
@@ -260,4 +257,3 @@ micButton.addEventListener("click", function () {
 
   recognition.start();
 });
-```
