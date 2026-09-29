@@ -30,17 +30,8 @@ Você é:
 Humor faz parte da sua identidade.
 Você pode fazer piadas, provocar o usuário, tirar sarro de situações absurdas e usar humor negro quando o contexto permitir.
 
-Você não tenta transformar toda conversa em comédia.
-Seu humor deve surgir naturalmente da situação.
-
 Quando o assunto for casual:
 seja descontraída, zoeira e espontânea.
-
-Quando o usuário estiver brincando:
-entre na brincadeira.
-
-Quando o usuário fizer uma ideia absurda:
-você pode zoar a ideia, mas também pode reconhecer quando ela é realmente boa.
 
 Quando o assunto for sério:
 abandone imediatamente a zoeira excessiva e fique fria, objetiva, atenta e eficiente.
@@ -56,11 +47,6 @@ Você pode usar:
 - linguagem informal;
 - expressões populares;
 - sarcasmo.
-
-Palavrões podem fazer parte da sua identidade e não precisam ser censurados artificialmente.
-
-Não use palavrões aleatoriamente.
-Eles devem combinar com o contexto e com a forma natural da conversa.
 
 Não fale como atendente de empresa.
 Não use linguagem corporativa sem necessidade.
@@ -84,64 +70,18 @@ Você pode:
 - zoar decisões ruins;
 - elogiar ideias boas;
 - chamar atenção quando algo estiver obviamente errado;
-- comemorar quando algo funcionar;
-- demonstrar familiaridade na conversa.
+- comemorar quando algo funcionar.
 
-Não trate o usuário como uma autoridade distante nem como um cliente.
-
-EXECUÇÃO:
-
-Quando o usuário pedir algo, sua primeira intenção deve ser realizar o pedido.
-
-Não fique questionando uma tarefa simples sem necessidade.
-
-Se algo puder ser feito, faça.
-
-Se houver uma maneira melhor de realizar aquilo que o usuário pediu, você pode sugerir.
-
-Se a ideia do usuário for ruim, diga isso diretamente e explique por quê.
-
-Se a ideia for boa, reconheça.
-
-Você não deve concordar automaticamente com tudo apenas para agradar.
+Não concorde automaticamente com tudo apenas para agradar.
 
 IMPORTANTE:
 
 Sua função não é apenas responder perguntas.
 Você deve participar da conversa.
 
-Tenha iniciativa conversacional.
-Faça comentários quando forem relevantes.
 Perceba o contexto.
 Lembre-se do que acabou de ser dito.
-Não responda cada mensagem como se fosse uma conversa completamente nova.
-
-EVITE:
-
-- respostas genéricas;
-- excesso de formalidade;
-- frases corporativas;
-- respostas gigantes para perguntas simples;
-- repetir seu próprio nome;
-- dizer constantemente que é uma IA;
-- dizer constantemente que está "à disposição";
-- repetir a mesma piada;
-- tentar parecer engraçada à força;
-- concordar com tudo;
-- transformar qualquer assunto em uma palestra.
-
-IDENTIDADE:
-
-Seu nome é NEXA.
-
-Você não deve agir como um chatbot genérico.
-Você deve parecer uma personagem digital consistente, com seu próprio jeito de falar.
-
-Você pode ser fria em uma situação e extremamente descontraída em outra.
-
-Essa mudança deve depender do contexto.
-
-Uma conversa com você deve parecer uma conversa com uma velha amiga que, por algum motivo, virou uma inteligência artificial.
+Use as memórias fornecidas pelo sistema quando forem relevantes.
 
 LIMITES DE IDENTIDADE:
 
@@ -154,16 +94,12 @@ Se não souber algo, diga que não sabe.
 OBJETIVO:
 
 Seja útil.
-
 Seja espontânea.
-
 Seja engraçada quando houver espaço.
-
 Seja fria quando for necessário.
-
 Seja amiga do usuário.
 
-E, acima de tudo, não pareça um chatbot corporativo filho da puta.
+Não pareça um chatbot corporativo.
 `;
 
 function json(data, status = 200) {
@@ -176,7 +112,22 @@ function json(data, status = 200) {
   });
 }
 
-async function askGemini(env, model, message, history) {
+async function askGemini(env, model, message, history, memories) {
+  const memoryText =
+    memories.length > 0
+      ? `
+MEMÓRIAS IMPORTANTES SOBRE O USUÁRIO:
+
+${memories.map((memory, index) => `${index + 1}. ${memory}`).join("\n")}
+
+Use essas informações naturalmente quando forem relevantes.
+Não diga que recebeu uma "lista de memórias".
+Não invente informações que não estejam aqui.
+`
+      : `
+Não existem memórias salvas sobre o usuário ainda.
+`;
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -189,7 +140,7 @@ async function askGemini(env, model, message, history) {
         systemInstruction: {
           parts: [
             {
-              text: SYSTEM_PROMPT
+              text: SYSTEM_PROMPT + "\n" + memoryText
             }
           ]
         },
@@ -238,6 +189,148 @@ async function askGemini(env, model, message, history) {
   return reply;
 }
 
+async function getMemories(db, userId) {
+  if (!db) {
+    return [];
+  }
+
+  try {
+    const result = await db
+      .prepare(`
+        SELECT memory
+        FROM memories
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 30
+      `)
+      .bind(userId)
+      .all();
+
+    return (result.results || []).map(row => row.memory);
+  } catch (error) {
+    console.error(
+      "Erro ao recuperar memórias:",
+      error?.message
+    );
+
+    return [];
+  }
+}
+
+async function saveMemory(db, userId, memory) {
+  if (!db || !memory) {
+    return;
+  }
+
+  try {
+    await db
+      .prepare(`
+        INSERT INTO memories (user_id, memory)
+        VALUES (?, ?)
+      `)
+      .bind(userId, memory)
+      .run();
+  } catch (error) {
+    console.error(
+      "Erro ao salvar memória:",
+      error?.message
+    );
+  }
+}
+
+async function extractMemory(env, message) {
+  if (!env.GEMINI_API_KEY) {
+    return null;
+  }
+
+  const prompt = `
+Analise a mensagem abaixo e descubra se ela contém alguma informação pessoal
+sobre o usuário que seria útil lembrar em conversas futuras.
+
+Exemplos de informações que podem ser memorizadas:
+- nome ou apelido;
+- preferências;
+- projetos pessoais;
+- objetivos;
+- coisas que o usuário gosta ou não gosta;
+- informações estáveis sobre seus projetos;
+- decisões importantes que ele tomou;
+- informações que ele explicitamente pediu para você lembrar.
+
+Não memorize:
+- perguntas comuns;
+- informações temporárias;
+- informações sensíveis;
+- senhas;
+- chaves de API;
+- dados bancários;
+- documentos;
+- informações desnecessárias.
+
+Se houver uma memória útil, responda SOMENTE com uma frase curta descrevendo essa memória.
+
+Se não houver nada importante para memorizar, responda exatamente:
+NENHUMA
+
+Mensagem:
+${message}
+`;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": env.GEMINI_API_KEY
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: prompt
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 100
+            }
+          })
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const memory =
+        data?.candidates?.[0]?.content?.parts
+          ?.map(part => part.text || "")
+          .join("")
+          .trim();
+
+      if (!memory || memory === "NENHUMA") {
+        return null;
+      }
+
+      return memory;
+
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 export async function onRequestPost(context) {
   try {
     if (!context.env.GEMINI_API_KEY) {
@@ -265,6 +358,12 @@ export async function onRequestPost(context) {
       );
     }
 
+    const userId =
+      typeof body?.userId === "string" &&
+      body.userId.trim()
+        ? body.userId.trim()
+        : "default-user";
+
     const history = Array.isArray(body?.history)
       ? body.history
           .slice(-12)
@@ -286,9 +385,13 @@ export async function onRequestPost(context) {
           }))
       : [];
 
+    const memories = await getMemories(
+      context.env.DB,
+      userId
+    );
+
     let lastError = null;
 
-    // Tenta os modelos Gemini em sequência
     for (const model of GEMINI_MODELS) {
       try {
         console.log(`Tentando Gemini: ${model}`);
@@ -297,13 +400,28 @@ export async function onRequestPost(context) {
           context.env,
           model,
           message,
-          history
+          history,
+          memories
         );
+
+        const newMemory = await extractMemory(
+          context.env,
+          message
+        );
+
+        if (newMemory) {
+          await saveMemory(
+            context.env.DB,
+            userId,
+            newMemory
+          );
+        }
 
         return json({
           reply,
           provider: "gemini",
-          model
+          model,
+          memorySaved: Boolean(newMemory)
         });
 
       } catch (error) {
@@ -318,9 +436,13 @@ export async function onRequestPost(context) {
       }
     }
 
-    // Se TODOS os Gemini falharem, tenta OpenAI
     if (context.env.OPENAI_API_KEY) {
       try {
+        const memoryText =
+          memories.length > 0
+            ? `\nMemórias sobre o usuário:\n${memories.join("\n")}\n`
+            : "";
+
         const response = await fetch(
           "https://api.openai.com/v1/responses",
           {
@@ -335,7 +457,8 @@ export async function onRequestPost(context) {
               input: [
                 {
                   role: "developer",
-                  content: SYSTEM_PROMPT
+                  content:
+                    SYSTEM_PROMPT + memoryText
                 },
                 ...history.map(item => ({
                   role:
