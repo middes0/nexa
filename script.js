@@ -165,15 +165,15 @@ composer.addEventListener("submit", async function (event) {
 
     hideTyping();
 
-    history.push({
-      role: "user",
-      text: text
-    });
+   history.push({
+  role: "user",
+  content: text
+});
 
-    history.push({
-      role: "model",
-      text: reply
-    });
+history.push({
+  role: "model",
+  content: reply
+});
 
     addAnimatedMessage(reply);
 
