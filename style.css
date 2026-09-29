@@ -36,3 +36,28 @@
     opacity: 1;
   }
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.new-chat-button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0d151c;
+  color: var(--muted);
+  padding: 8px 11px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.new-chat-button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.new-chat-button:active {
+  transform: scale(0.97);
+}
