@@ -1,0 +1,8 @@
+{
+  "appId": "com.nexa.assistant",
+  "appName": "NEXA",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  }
+}
