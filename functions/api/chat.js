@@ -54,9 +54,7 @@ const result = await env.DB
 .bind(userId)
 .all();
 
-
 return (result.results || []).map(row => row.memory);
-
 
 } catch {
 return [];
@@ -82,15 +80,7 @@ if (!env.DB || !userId) return;
 try {
 await env.DB
 .prepare(
-`DELETE FROM memories
-         WHERE user_id = ?
-         AND id NOT IN (
-           SELECT id
-           FROM memories
-           WHERE user_id = ?
-           ORDER BY id DESC
-           LIMIT 50
-         )`
+DELETE FROM memories WHERE user_id = ? AND id NOT IN ( SELECT id FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 50 )
 )
 .bind(userId, userId)
 .run();
@@ -126,7 +116,7 @@ Não invente informações.
 
 try {
 const response = await fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY}`,
+https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY},
 {
 method: "POST",
 headers: {
@@ -136,14 +126,19 @@ body: JSON.stringify({
 systemInstruction: {
 parts: [
 {
-text: "Extraia apenas memórias úteis e verdadeiras do usuário."
+text:
+"Extraia apenas memórias úteis e verdadeiras do usuário."
 }
 ]
 },
 contents: [
 {
 role: "user",
-parts: [{ text: prompt }]
+parts: [
+{
+text: prompt
+}
+]
 }
 ],
 generationConfig: {
@@ -152,7 +147,6 @@ maxOutputTokens: 100
 })
 }
 );
-
 
 if (!response.ok) return;
 
@@ -167,10 +161,17 @@ if (
   memory.length > 3 &&
   memory.length < 500
 ) {
-  await saveMemory(env, userId, memory);
-  await cleanMemory(env, userId);
-}
+  await saveMemory(
+    env,
+    userId,
+    memory
+  );
 
+  await cleanMemory(
+    env,
+    userId
+  );
+}
 
 } catch {}
 }
@@ -191,11 +192,12 @@ parts: [
 {
 text:
 "Memórias relevantes sobre o usuário:\n" +
-memories.map(m => `- ${m}`).join("\n")
+memories
+.map(m => - ${m})
+.join("\n")
 }
 ]
 });
-
 
 contents.push({
   role: "model",
@@ -207,18 +209,18 @@ contents.push({
   ]
 });
 
-
 }
 
 for (const message of messages) {
 if (
 !message ||
 !message.content ||
-!["user", "model", "assistant"].includes(message.role)
+!["user", "model", "assistant"].includes(
+message.role
+)
 ) {
 continue;
 }
-
 
 contents.push({
   role:
@@ -227,11 +229,12 @@ contents.push({
       : message.role,
   parts: [
     {
-      text: String(message.content)
+      text: String(
+        message.content
+      )
     }
   ]
 });
-
 
 }
 
@@ -247,7 +250,7 @@ text: "Olá"
 }
 
 return fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${env.GEMINI_API_KEY}`,
+https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${env.GEMINI_API_KEY},
 {
 method: "POST",
 headers: {
@@ -274,14 +277,110 @@ maxOutputTokens: 300
 );
 }
 
+function createGeminiFallbackRequest(
+env,
+messages,
+memories
+) {
+const contents = [];
+
+if (memories.length) {
+contents.push({
+role: "user",
+parts: [
+{
+text:
+"Memórias relevantes sobre o usuário:\n" +
+memories
+.map(m => - ${m})
+.join("\n")
+}
+]
+});
+
+contents.push({
+  role: "model",
+  parts: [
+    {
+      text:
+        "Entendido. Vou usar essas memórias quando forem relevantes."
+    }
+  ]
+});
+
+}
+
+for (const message of messages) {
+if (
+!message ||
+!message.content
+) {
+continue;
+}
+
+contents.push({
+  role:
+    message.role === "assistant"
+      ? "model"
+      : message.role === "model"
+        ? "model"
+        : "user",
+  parts: [
+    {
+      text: String(
+        message.content
+      )
+    }
+  ]
+});
+
+}
+
+if (!contents.length) {
+contents.push({
+role: "user",
+parts: [
+{
+text: "Olá"
+}
+]
+});
+}
+
+return fetch(
+https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY},
+{
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify({
+systemInstruction: {
+parts: [
+{
+text: SYSTEM_PROMPT
+}
+]
+},
+contents,
+generationConfig: {
+maxOutputTokens: 300
+}
+})
+}
+);
+}
+
 function parseSSEEvent(raw) {
-const lines = raw.split("\n");
+const lines = raw.split(/\r?\n/);
 
 let data = "";
 
 for (const line of lines) {
 if (line.startsWith("data:")) {
-data += line.slice(5).trim();
+data += line
+.slice(5)
+.trim();
 }
 }
 
@@ -296,71 +395,105 @@ return null;
 
 function extractText(data) {
 const parts =
-data?.candidates?.[0]?.content?.parts || [];
+data?.candidates?.[0]?.content?.parts ||
+[];
 
 let text = "";
 
 for (const part of parts) {
-if (part?.thought === true) continue;
-
-
-if (typeof part?.text === "string") {
-  text += part.text;
+if (part?.thought === true) {
+continue;
 }
 
+if (
+  typeof part?.text === "string"
+) {
+  text += part.text;
+}
 
 }
 
 return text;
 }
 
-async function waitForFirstText(response, model) {
+async function waitForFirstText(
+response,
+model
+) {
 if (!response.ok) {
-const errorText = await response.text();
-
+const errorText =
+await response.text();
 
 throw new Error(
   `Gemini ${model} HTTP ${response.status}: ${errorText}`
 );
 
-
 }
 
 if (!response.body) {
 throw new Error(
-`Gemini ${model} não retornou um corpo de resposta.`
+Gemini ${model} não retornou um corpo de resposta.
 );
 }
 
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
+const reader =
+response.body.getReader();
+
+const decoder =
+new TextDecoder();
 
 let buffer = "";
 
 while (true) {
-const { value, done } = await reader.read();
-
+const {
+value,
+done
+} = await reader.read();
 
 if (done) {
+  const finalData =
+    parseSSEEvent(buffer);
+
+  if (finalData) {
+    const finalText =
+      extractText(finalData);
+
+    if (finalText) {
+      return {
+        reader,
+        decoder,
+        buffer: "",
+        firstText: finalText
+      };
+    }
+  }
+
   throw new Error(
     `Gemini ${model} encerrou sem retornar texto.`
   );
 }
 
-buffer += decoder.decode(value, {
-  stream: true
-});
+buffer += decoder.decode(
+  value,
+  {
+    stream: true
+  }
+);
 
-const events = buffer.split("\n\n");
+const events =
+  buffer.split(/\r?\n\r?\n/);
 
-buffer = events.pop() || "";
+buffer =
+  events.pop() || "";
 
 for (const event of events) {
-  const data = parseSSEEvent(event);
+  const data =
+    parseSSEEvent(event);
 
   if (!data) continue;
 
-  const text = extractText(data);
+  const text =
+    extractText(data);
 
   if (text) {
     return {
@@ -371,7 +504,6 @@ for (const event of events) {
     };
   }
 }
-
 
 }
 }
@@ -387,70 +519,231 @@ userId,
 userMessage,
 executionContext
 ) {
-const encoder = new TextEncoder();
+const encoder =
+new TextEncoder();
 
-let fullText = firstText;
+let fullText =
+firstText;
 
-const stream = new ReadableStream({
+const stream =
+new ReadableStream({
 async start(controller) {
 function send(data) {
 controller.enqueue(
 encoder.encode(
-`data: ${JSON.stringify(data)}\n\n`
+data: ${JSON.stringify(data)}\n\n
 )
 );
 }
 
-
-  try {
-    send({
-      type: "text",
-      text: firstText
-    });
-
-    let localBuffer = buffer;
-
-    while (true) {
-      const { value, done } =
-        await reader.read();
-
-      if (done) break;
-
-      localBuffer += decoder.decode(value, {
-        stream: true
+    try {
+      send({
+        type: "text",
+        text: firstText
       });
 
-      const events =
-        localBuffer.split("\n\n");
+      let localBuffer =
+        buffer;
 
-      localBuffer =
-        events.pop() || "";
+      while (true) {
+        const {
+          value,
+          done
+        } =
+          await reader.read();
 
-      for (const event of events) {
-        const data =
-          parseSSEEvent(event);
+        if (done) {
+          break;
+        }
 
-        if (!data) continue;
+        localBuffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true
+            }
+          );
 
-        const text =
-          extractText(data);
+        const events =
+          localBuffer.split(
+            /\r?\n\r?\n/
+          );
 
-        if (!text) continue;
+        localBuffer =
+          events.pop() || "";
 
-        fullText += text;
+        for (
+          const event
+          of events
+        ) {
+          const data =
+            parseSSEEvent(
+              event
+            );
 
-        send({
-          type: "text",
-          text
-        });
+          if (!data) {
+            continue;
+          }
+
+          const text =
+            extractText(
+              data
+            );
+
+          if (!text) {
+            continue;
+          }
+
+          fullText += text;
+
+          send({
+            type: "text",
+            text
+          });
+        }
       }
+
+      if (localBuffer) {
+        const data =
+          parseSSEEvent(
+            localBuffer
+          );
+
+        if (data) {
+          const text =
+            extractText(
+              data
+            );
+
+          if (text) {
+            fullText += text;
+
+            send({
+              type: "text",
+              text
+            });
+          }
+        }
+      }
+
+      send({
+        type: "done"
+      });
+
+      if (
+        executionContext?.waitUntil
+      ) {
+        executionContext.waitUntil(
+          extractMemory(
+            env,
+            userId,
+            userMessage,
+            fullText
+          )
+        );
+      }
+
+      controller.close();
+    } catch (error) {
+      send({
+        type: "error",
+        error:
+          error?.message ||
+          "Erro durante a resposta."
+      });
+
+      controller.close();
     }
+  }
+});
 
-    send({
-      type: "done"
-    });
+return new Response(
+stream,
+{
+headers: {
+"Content-Type":
+"text/event-stream; charset=utf-8",
+"Cache-Control":
+"no-cache, no-transform",
+"Connection":
+"keep-alive"
+}
+}
+);
+}
 
-    if (executionContext?.waitUntil) {
+async function createFallbackClientResponse(
+env,
+messages,
+memories,
+userId,
+userMessage,
+executionContext
+) {
+const response =
+await createGeminiFallbackRequest(
+env,
+messages,
+memories
+);
+
+if (!response.ok) {
+const errorText =
+await response.text();
+
+throw new Error(
+  `Gemini ${LAST_FALLBACK} HTTP ${response.status}: ${errorText}`
+);
+
+}
+
+const data =
+await response.json();
+
+const text =
+data?.candidates?.[0]?.content?.parts
+?.filter(
+part =>
+part?.thought !== true &&
+typeof part?.text === "string"
+)
+?.map(
+part => part.text
+)
+?.join("") || "";
+
+if (!text.trim()) {
+throw new Error(
+Gemini ${LAST_FALLBACK} respondeu sem texto.
+);
+}
+
+const encoder =
+new TextEncoder();
+
+const fullText =
+text;
+
+const stream =
+new ReadableStream({
+start(controller) {
+controller.enqueue(
+encoder.encode(
+data: ${JSON.stringify({ type: "text", text: fullText })}\n\n
+)
+);
+
+    controller.enqueue(
+      encoder.encode(
+        `data: ${JSON.stringify({
+          type: "done"
+        })}\n\n`
+      )
+    );
+
+    if (
+      executionContext?.waitUntil
+    ) {
       executionContext.waitUntil(
         extractMemory(
           env,
@@ -462,34 +755,31 @@ encoder.encode(
     }
 
     controller.close();
-  } catch (error) {
-    send({
-      type: "error",
-      error:
-        error?.message ||
-        "Erro durante a resposta."
-    });
-
-    controller.close();
   }
-}
-
-
 });
 
-return new Response(stream, {
+return new Response(
+stream,
+{
 headers: {
 "Content-Type":
 "text/event-stream; charset=utf-8",
 "Cache-Control":
 "no-cache, no-transform",
-"Connection": "keep-alive"
+"Connection":
+"keep-alive"
 }
-});
+}
+);
 }
 
-export async function onRequestPost(context) {
-const { request, env } = context;
+export async function onRequestPost(
+context
+) {
+const {
+request,
+env
+} = context;
 
 try {
 if (!env.GEMINI_API_KEY) {
@@ -502,23 +792,36 @@ error:
 );
 }
 
+const body =
+  await request.json();
 
-const body = await request.json();
+const userId =
+  String(
+    body?.userId || ""
+  );
 
-const userId = String(
-  body?.userId || ""
-);
+let incomingMessages =
+  [];
 
-let incomingMessages = [];
-
-if (Array.isArray(body?.messages)) {
-  incomingMessages = body.messages;
-} else if (Array.isArray(body?.history)) {
-  incomingMessages = body.history;
+if (
+  Array.isArray(
+    body?.messages
+  )
+) {
+  incomingMessages =
+    body.messages;
+} else if (
+  Array.isArray(
+    body?.history
+  )
+) {
+  incomingMessages =
+    body.history;
 }
 
 const directMessage =
-  typeof body?.message === "string"
+  typeof body?.message ===
+  "string"
     ? body.message.trim()
     : "";
 
@@ -526,7 +829,8 @@ if (
   directMessage &&
   !incomingMessages.some(
     message =>
-      message?.role === "user" &&
+      message?.role ===
+        "user" &&
       String(
         message?.content || ""
       ) === directMessage
@@ -536,7 +840,8 @@ if (
     ...incomingMessages,
     {
       role: "user",
-      content: directMessage
+      content:
+        directMessage
     }
   ];
 }
@@ -546,7 +851,8 @@ const userMessage =
   incomingMessages
     .filter(
       message =>
-        message?.role === "user"
+        message?.role ===
+        "user"
     )
     .at(-1)?.content ||
   "";
@@ -556,17 +862,22 @@ const messages =
     .slice(-6)
     .map(message => ({
       role:
-        message?.role === "assistant"
+        message?.role ===
+        "assistant"
           ? "assistant"
-          : message?.role === "model"
+          : message?.role ===
+              "model"
             ? "model"
             : "user",
-      content: String(
-        message?.content || ""
-      ).trim()
+      content:
+        String(
+          message?.content ||
+            ""
+        ).trim()
     }))
     .filter(
-      message => message.content
+      message =>
+        message.content
     );
 
 if (!messages.length) {
@@ -579,58 +890,65 @@ if (!messages.length) {
   );
 }
 
-const memoriesPromise =
-  getMemories(env, userId);
+const memories =
+  await getMemories(
+    env,
+    userId
+  );
 
 const controllers =
   MODELS.map(
-    () => new AbortController()
+    () =>
+      new AbortController()
   );
 
-const memories =
-  await memoriesPromise;
-
-const attempts = MODELS.map(
-  async (model, index) => {
-    const response =
-      await createGeminiRequest(
-        env,
-        model,
-        messages,
-        memories,
-        controllers[index].signal
-      );
-
-    if (!response.ok) {
-      const errorText =
-        await response.text();
-
-      throw new Error(
-        `Gemini ${model} HTTP ${response.status}: ${errorText}`
-      );
-    }
-
-    const result =
-      await waitForFirstText(
-        response,
-        model
-      );
-
-    return {
-      ...result,
+const attempts =
+  MODELS.map(
+    async (
       model,
-      controller:
-        controllers[index]
-    };
-  }
-);
+      index
+    ) => {
+      const response =
+        await createGeminiRequest(
+          env,
+          model,
+          messages,
+          memories,
+          controllers[index]
+            .signal
+        );
+
+      if (!response.ok) {
+        const errorText =
+          await response.text();
+
+        throw new Error(
+          `Gemini ${model} HTTP ${response.status}: ${errorText}`
+        );
+      }
+
+      const result =
+        await waitForFirstText(
+          response,
+          model
+        );
+
+      return {
+        ...result,
+        model,
+        controller:
+          controllers[index]
+      };
+    }
+  );
 
 let winner;
 
 try {
-  winner = await Promise.any(
-    attempts
-  );
+  winner =
+    await Promise.any(
+      attempts
+    );
 } catch {
   winner = null;
 }
@@ -663,46 +981,14 @@ if (winner) {
   );
 }
 
-const fallbackResponse =
-  await createGeminiRequest(
-    env,
-    LAST_FALLBACK,
-    messages,
-    memories
-  );
-
-if (!fallbackResponse.ok) {
-  const errorText =
-    await fallbackResponse.text();
-
-  return jsonResponse(
-    {
-      error:
-        `Todos os modelos falharam. ` +
-        `Último erro: ${errorText}`
-    },
-    503
-  );
-}
-
-const fallback =
-  await waitForFirstText(
-    fallbackResponse,
-    LAST_FALLBACK
-  );
-
-return createClientStream(
+return createFallbackClientResponse(
   env,
-  LAST_FALLBACK,
-  fallback.reader,
-  fallback.decoder,
-  fallback.buffer,
-  fallback.firstText,
+  messages,
+  memories,
   userId,
   userMessage,
   context
 );
-
 
 } catch (error) {
 return jsonResponse(
