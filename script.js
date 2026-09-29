@@ -27,14 +27,52 @@ function addMessage(text, type) {
   });
 }
 
+function showTyping() {
+  // Evita criar dois indicadores ao mesmo tempo
+  if (document.getElementById("nexaTyping")) {
+    return;
+  }
+
+  const message = document.createElement("div");
+  message.className = "message nexa typing-message";
+  message.id = "nexaTyping";
+
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "NEXA";
+
+  const typing = document.createElement("p");
+  typing.className = "typing";
+  typing.innerHTML = `
+    <span></span>
+    <span></span>
+    <span></span>
+  `;
+
+  message.appendChild(label);
+  message.appendChild(typing);
+  chat.appendChild(message);
+
+  message.scrollIntoView({
+    behavior: "smooth",
+    block: "end"
+  });
+}
+
+function hideTyping() {
+  const typing = document.getElementById("nexaTyping");
+
+  if (typing) {
+    typing.remove();
+  }
+}
+
 async function askNexa(text) {
   const response = await fetch("/api/chat", {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json"
     },
-
     body: JSON.stringify({
       message: text,
       history: history.slice(-12)
@@ -76,15 +114,24 @@ composer.addEventListener("submit", async function (event) {
     return;
   }
 
+  // Mostra a mensagem do usuário
   addMessage(text, "user");
 
+  // Limpa o campo
   input.value = "";
 
+  // Bloqueia os controles enquanto a NEXA responde
   sendButton.disabled = true;
   micButton.disabled = true;
 
+  // Mostra "NEXA está digitando..."
+  showTyping();
+
   try {
     const reply = await askNexa(text);
+
+    // Remove o indicador antes de mostrar a resposta
+    hideTyping();
 
     history.push({
       role: "user",
@@ -100,6 +147,9 @@ composer.addEventListener("submit", async function (event) {
 
   } catch (error) {
     console.error("NEXA error:", error);
+
+    // Garante que o indicador desapareça mesmo se der erro
+    hideTyping();
 
     addMessage(
       "Erro ao conectar com a NEXA: " +
