@@ -1,7 +1,8 @@
 const MODELS = [
   "gemini-3.8-flash",
   "gemini-3.7-flash",
-  "gemini-3.6-flash"
+  "gemini-3.6-flash",
+  "gemini-3.5-flash-lite"
 ];
 
 const SYSTEM_PROMPT = `
@@ -45,8 +46,14 @@ function json(data, status = 200) {
   );
 }
 
+/* =========================================================
+   MEMÓRIA
+========================================================= */
+
 async function getMemories(db, userId) {
-  if (!db) return [];
+  if (!db) {
+    return [];
+  }
 
   try {
     const result = await db
@@ -79,7 +86,9 @@ async function getMemories(db, userId) {
 }
 
 async function saveMemory(db, userId, memory) {
-  if (!db || !memory) return;
+  if (!db || !memory) {
+    return;
+  }
 
   try {
     const existing = await db
@@ -93,7 +102,9 @@ async function saveMemory(db, userId, memory) {
       .bind(userId, memory)
       .first();
 
-    if (existing) return;
+    if (existing) {
+      return;
+    }
 
     await db
       .prepare(`
@@ -115,18 +126,24 @@ async function saveMemory(db, userId, memory) {
 }
 
 function cleanMemory(text) {
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
-  const memory = text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
-    .trim();
+  const memory =
+    text
+      .trim()
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
 
-  if (!memory) return null;
+  if (!memory) {
+    return null;
+  }
 
-  const lower = memory.toLowerCase();
+  const lower =
+    memory.toLowerCase();
 
   const invalid = [
     "nenhuma",
@@ -144,7 +161,8 @@ function cleanMemory(text) {
 
   if (
     invalid.some(
-      value => lower.includes(value)
+      value =>
+        lower.includes(value)
     )
   ) {
     return null;
@@ -161,16 +179,20 @@ function cleanMemory(text) {
 }
 
 async function extractMemory(env, message) {
-  if (!message) return null;
+  if (!message) {
+    return null;
+  }
 
-  const nameMatch = message.match(
-    /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
-  );
+  const nameMatch =
+    message.match(
+      /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
+    );
 
   if (nameMatch) {
-    const name = nameMatch[1]
-      .trim()
-      .replace(/\s+/g, " ");
+    const name =
+      nameMatch[1]
+        .trim()
+        .replace(/\s+/g, " ");
 
     if (
       name.length >= 2 &&
@@ -180,7 +202,8 @@ async function extractMemory(env, message) {
     }
   }
 
-  const lower = message.toLowerCase();
+  const lower =
+    message.toLowerCase();
 
   const shouldAnalyze = [
     "eu gosto",
@@ -203,30 +226,41 @@ async function extractMemory(env, message) {
     "quero que você lembre",
     "quero que voce lembre"
   ].some(
-    phrase => lower.includes(phrase)
+    phrase =>
+      lower.includes(phrase)
   );
 
-  if (!shouldAnalyze) return null;
-  if (!env.GEMINI_API_KEY) return null;
+  if (!shouldAnalyze) {
+    return null;
+  }
+
+  if (!env.GEMINI_API_KEY) {
+    return null;
+  }
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`,
-      {
-        method: "POST",
+    const response =
+      await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent`,
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": env.GEMINI_API_KEY
-        },
+          headers: {
+            "Content-Type":
+              "application/json",
 
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: `
+            "x-goog-api-key":
+              env.GEMINI_API_KEY
+          },
+
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+
+                parts: [
+                  {
+                    text: `
 Extraia uma única informação pessoal
 estável desta mensagem.
 
@@ -242,29 +276,37 @@ dados bancários ou informações sensíveis.
 Mensagem:
 ${message}
 `
-                }
-              ]
+                  }
+                ]
+              }
+            ],
+
+            generationConfig: {
+              maxOutputTokens: 60
             }
-          ],
+          })
+        }
+      );
 
-          generationConfig: {
-            maxOutputTokens: 60
-          }
-        })
-      }
-    );
+    if (!response.ok) {
+      return null;
+    }
 
-    if (!response.ok) return null;
-
-    const data = await response
-      .json()
-      .catch(() => ({}));
+    const data =
+      await response
+        .json()
+        .catch(
+          () => ({})
+        );
 
     const result =
       data?.candidates?.[0]
         ?.content
         ?.parts
-        ?.map(part => part.text || "")
+        ?.map(
+          part =>
+            part.text || ""
+        )
         .join("")
         .trim();
 
@@ -274,6 +316,10 @@ ${message}
     return null;
   }
 }
+
+/* =========================================================
+   FALLBACK
+========================================================= */
 
 function shouldFallback(status) {
   return [
@@ -285,7 +331,11 @@ function shouldFallback(status) {
   ].includes(status);
 }
 
-async function streamGeminiModel(
+/* =========================================================
+   GEMINI STREAM
+========================================================= */
+
+async function createGeminiStream(
   env,
   model,
   message,
@@ -294,8 +344,9 @@ async function streamGeminiModel(
   context,
   userId
 ) {
-  const memoryText = memories.length
-    ? `
+  const memoryText =
+    memories.length
+      ? `
 MEMÓRIAS DO USUÁRIO:
 
 ${memories
@@ -305,98 +356,128 @@ ${memories
   )
   .join("\n")}
 `
-    : "";
+      : "";
 
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
-  const response = await fetch(
-    url,
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream",
-        "x-goog-api-key": env.GEMINI_API_KEY
-      },
-
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text:
-                SYSTEM_PROMPT +
-                memoryText
-            }
-          ]
-        },
-
-        contents: [
-          ...history,
-
-          {
-            role: "user",
-
-            parts: [
-              {
-                text: message
-              }
-            ]
-          }
-        ],
-
-        generationConfig: {
-          maxOutputTokens: 400,
-
-          thinkingConfig: {
-            thinkingLevel: "low"
-          }
-        }
-      })
-    }
+  console.log(
+    `NEXA tentando modelo: ${model}`
   );
 
+  const response =
+    await fetch(
+      url,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Accept":
+            "text/event-stream",
+
+          "x-goog-api-key":
+            env.GEMINI_API_KEY
+        },
+
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  SYSTEM_PROMPT +
+                  memoryText
+              }
+            ]
+          },
+
+          contents: [
+            ...history,
+
+            {
+              role: "user",
+
+              parts: [
+                {
+                  text: message
+                }
+              ]
+            }
+          ],
+
+          generationConfig: {
+            maxOutputTokens: 400,
+
+            thinkingConfig: {
+              thinkingLevel: "low"
+            }
+          }
+        })
+      }
+    );
+
+  /*
+    IMPORTANTE:
+
+    Este erro acontece ANTES de criarmos
+    o stream para o navegador.
+
+    Portanto o onRequestPost consegue
+    capturar o 503 e tentar o próximo modelo.
+  */
+
   if (!response.ok) {
-    const errorText = await response
-      .text()
-      .catch(() => "");
+    const errorText =
+      await response
+        .text()
+        .catch(() => "");
 
     console.error(
-      `Gemini ${model} HTTP ERROR:`,
-      response.status,
+      `Gemini ${model} HTTP ${response.status}:`,
       errorText
     );
 
-    const error = new Error(
-      `Gemini ${model} HTTP ${response.status}: ${errorText}`
-    );
+    const error =
+      new Error(
+        `Gemini HTTP ${response.status}: ${errorText}`
+      );
 
-    error.status = response.status;
+    error.status =
+      response.status;
 
     throw error;
   }
 
   if (!response.body) {
-    const error = new Error(
-      `Gemini ${model} não retornou um stream.`
-    );
+    const error =
+      new Error(
+        `Gemini ${model} não retornou um stream.`
+      );
 
-    error.status = 502;
+    error.status = 503;
 
     throw error;
   }
 
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+  const encoder =
+    new TextEncoder();
+
+  const decoder =
+    new TextDecoder();
 
   const {
     readable,
     writable
-  } = new TransformStream();
+  } =
+    new TransformStream();
 
-  const writer = writable.getWriter();
-  const reader = response.body.getReader();
+  const writer =
+    writable.getWriter();
+
+  const reader =
+    response.body.getReader();
 
   let buffer = "";
   let fullReply = "";
@@ -409,20 +490,28 @@ ${memories
     );
   }
 
-  async function processGeminiData(dataText) {
-    if (!dataText) return;
+  async function processGeminiData(
+    dataText
+  ) {
+    if (!dataText) {
+      return;
+    }
 
-    if (dataText === "[DONE]") {
+    if (
+      dataText === "[DONE]"
+    ) {
       return;
     }
 
     let data;
 
     try {
-      data = JSON.parse(dataText);
+      data =
+        JSON.parse(dataText);
+
     } catch {
       console.error(
-        "Gemini enviou JSON inválido:",
+        "JSON inválido recebido do Gemini:",
         dataText
       );
 
@@ -430,24 +519,25 @@ ${memories
     }
 
     if (data?.error) {
-      const error = new Error(
-        data.error.message ||
-        "Erro retornado pelo Gemini."
+      console.error(
+        `Erro interno do Gemini ${model}:`,
+        data.error
       );
 
-      error.status =
-        data.error.code ||
-        500;
-
-      throw error;
+      return;
     }
 
     const candidates =
-      Array.isArray(data?.candidates)
+      Array.isArray(
+        data?.candidates
+      )
         ? data.candidates
         : [];
 
-    for (const candidate of candidates) {
+    for (
+      const candidate
+      of candidates
+    ) {
       const parts =
         Array.isArray(
           candidate?.content?.parts
@@ -455,20 +545,29 @@ ${memories
           ? candidate.content.parts
           : [];
 
-      for (const part of parts) {
-        if (part?.thought === true) {
-          continue;
-        }
-
+      for (
+        const part
+        of parts
+      ) {
         if (
-          typeof part?.text !== "string"
+          part?.thought === true
         ) {
           continue;
         }
 
-        if (!part.text) continue;
+        if (
+          typeof part?.text !==
+            "string"
+        ) {
+          continue;
+        }
 
-        fullReply += part.text;
+        if (!part.text) {
+          continue;
+        }
+
+        fullReply +=
+          part.text;
 
         await sendEvent({
           type: "text",
@@ -478,26 +577,45 @@ ${memories
     }
   }
 
-  async function processSSE(event) {
+  async function processSSE(
+    event
+  ) {
     const lines =
       event.split(/\r?\n/);
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+    for (
+      const line
+      of lines
+    ) {
+      const trimmed =
+        line.trim();
 
-      if (!trimmed) continue;
-      if (trimmed.startsWith(":")) continue;
+      if (!trimmed) {
+        continue;
+      }
 
       if (
-        !trimmed.startsWith("data:")
+        trimmed.startsWith(":")
+      ) {
+        continue;
+      }
+
+      if (
+        !trimmed.startsWith(
+          "data:"
+        )
       ) {
         continue;
       }
 
       const dataText =
-        trimmed.slice(5).trim();
+        trimmed
+          .slice(5)
+          .trim();
 
-      if (!dataText) continue;
+      if (!dataText) {
+        continue;
+      }
 
       await processGeminiData(
         dataText
@@ -505,22 +623,32 @@ ${memories
     }
   }
 
+  /*
+    O stream já foi aceito pelo Gemini.
+    A partir daqui enviamos os tokens
+    normalmente para o navegador.
+  */
+
   (async () => {
     try {
       while (true) {
         const {
           value,
           done
-        } = await reader.read();
+        } =
+          await reader.read();
 
-        if (done) break;
+        if (done) {
+          break;
+        }
 
-        buffer += decoder.decode(
-          value,
-          {
-            stream: true
-          }
-        );
+        buffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true
+            }
+          );
 
         const events =
           buffer.split(
@@ -530,26 +658,34 @@ ${memories
         buffer =
           events.pop() || "";
 
-        for (const event of events) {
-          await processSSE(event);
+        for (
+          const event
+          of events
+        ) {
+          await processSSE(
+            event
+          );
         }
       }
 
-      buffer += decoder.decode();
+      buffer +=
+        decoder.decode();
 
       if (buffer.trim()) {
-        await processSSE(buffer);
+        await processSSE(
+          buffer
+        );
       }
 
       if (!fullReply.trim()) {
-        const error = new Error(
-          `O Gemini ${model} encerrou o stream sem retornar texto.`
+        throw new Error(
+          `O modelo ${model} encerrou o stream sem retornar texto.`
         );
-
-        error.status = 503;
-
-        throw error;
       }
+
+      /*
+        Salva memória em segundo plano.
+      */
 
       if (
         context.waitUntil &&
@@ -576,36 +712,38 @@ ${memories
 
       await sendEvent({
         type: "done",
-        provider: "gemini",
+
+        provider:
+          "gemini",
+
         model
       });
 
       await writer.close();
 
       console.log(
-        `NEXA respondeu usando ${model}: ${fullReply.length} caracteres`
+        `NEXA respondeu usando ${model}`
       );
 
     } catch (error) {
       console.error(
-        `Erro no streaming ${model}:`,
+        `Erro durante stream ${model}:`,
         error?.message
       );
 
       try {
         await sendEvent({
           type: "error",
+
           error:
             error?.message ||
-            `Erro durante o streaming do ${model}.`,
-          status:
-            error?.status || 500
+            "Erro durante a resposta da NEXA."
         });
 
         await writer.close();
 
       } catch {
-        // O stream pode já ter sido encerrado.
+        // Stream já fechado.
       }
     }
   })();
@@ -613,37 +751,20 @@ ${memories
   return readable;
 }
 
-async function tryModel(
-  env,
-  model,
-  message,
-  history,
-  memories,
-  context,
-  userId
+/* =========================================================
+   POST /api/chat
+========================================================= */
+
+export async function onRequestPost(
+  context
 ) {
-  const stream =
-    await streamGeminiModel(
-      env,
-      model,
-      message,
-      history,
-      memories,
-      context,
-      userId
-    );
-
-  return {
-    stream,
-    model
-  };
-}
-
-export async function onRequestPost(context) {
-  const start = Date.now();
+  const start =
+    Date.now();
 
   try {
-    if (!context.env.GEMINI_API_KEY) {
+    if (
+      !context.env.GEMINI_API_KEY
+    ) {
       return json(
         {
           error:
@@ -657,27 +778,32 @@ export async function onRequestPost(context) {
       await context.request.json();
 
     const message =
-      typeof body?.message === "string"
+      typeof body?.message ===
+      "string"
         ? body.message.trim()
         : "";
 
     if (!message) {
       return json(
         {
-          error: "Mensagem vazia."
+          error:
+            "Mensagem vazia."
         },
         400
       );
     }
 
     const userId =
-      typeof body?.userId === "string" &&
+      typeof body?.userId ===
+        "string" &&
       body.userId.trim()
         ? body.userId.trim()
         : "default-user";
 
     const history =
-      Array.isArray(body?.history)
+      Array.isArray(
+        body?.history
+      )
         ? body.history
             .slice(-6)
             .filter(
@@ -690,14 +816,17 @@ export async function onRequestPost(context) {
             .map(
               item => ({
                 role:
-                  item.role === "model" ||
-                  item.role === "assistant"
+                  item.role ===
+                    "model" ||
+                  item.role ===
+                    "assistant"
                     ? "model"
                     : "user",
 
                 parts: [
                   {
-                    text: item.content
+                    text:
+                      item.content
                   }
                 ]
               })
@@ -710,16 +839,28 @@ export async function onRequestPost(context) {
         userId
       );
 
-    let lastError = null;
+    let lastError =
+      null;
 
-    for (const model of MODELS) {
+    /*
+      FALLBACK REAL
+
+      3.8
+        ↓ 503
+      3.7
+        ↓ 503
+      3.6
+        ↓ 503
+      3.5 Flash-Lite
+    */
+
+    for (
+      const model
+      of MODELS
+    ) {
       try {
-        console.log(
-          `Tentando modelo: ${model}`
-        );
-
-        const result =
-          await tryModel(
+        const stream =
+          await createGeminiStream(
             context.env,
             model,
             message,
@@ -734,7 +875,7 @@ export async function onRequestPost(context) {
         );
 
         return new Response(
-          result.stream,
+          stream,
           {
             status: 200,
 
@@ -745,6 +886,9 @@ export async function onRequestPost(context) {
               "Cache-Control":
                 "no-cache, no-store, must-revalidate",
 
+              "Connection":
+                "keep-alive",
+
               "X-Accel-Buffering":
                 "no"
             }
@@ -752,12 +896,19 @@ export async function onRequestPost(context) {
         );
 
       } catch (error) {
-        lastError = error;
+        lastError =
+          error;
 
         console.error(
           `${model} falhou:`,
           error?.message
         );
+
+        /*
+          Só tenta o próximo modelo
+          quando for um erro temporário
+          de disponibilidade/capacidade.
+        */
 
         if (
           !shouldFallback(
@@ -768,10 +919,14 @@ export async function onRequestPost(context) {
         }
 
         console.log(
-          `${model} indisponível. Tentando próximo modelo...`
+          `FALLBACK: ${model} indisponível.`
         );
       }
     }
+
+    /*
+      Nenhum modelo conseguiu responder.
+    */
 
     return json(
       {
