@@ -54,9 +54,9 @@ const result = await env.DB
 .bind(userId)
 .all();
 
-```
+
 return (result.results || []).map(row => row.memory);
-```
+
 
 } catch {
 return [];
@@ -153,7 +153,7 @@ maxOutputTokens: 100
 }
 );
 
-```
+
 if (!response.ok) return;
 
 const data = await response.json();
@@ -170,7 +170,7 @@ if (
   await saveMemory(env, userId, memory);
   await cleanMemory(env, userId);
 }
-```
+
 
 } catch {}
 }
@@ -196,7 +196,7 @@ memories.map(m => `- ${m}`).join("\n")
 ]
 });
 
-```
+
 contents.push({
   role: "model",
   parts: [
@@ -206,7 +206,7 @@ contents.push({
     }
   ]
 });
-```
+
 
 }
 
@@ -278,11 +278,11 @@ let text = "";
 for (const part of parts) {
 if (part?.thought === true) continue;
 
-```
+
 if (typeof part?.text === "string") {
   text += part.text;
 }
-```
+
 
 }
 
@@ -293,11 +293,11 @@ async function waitForFirstText(response, model) {
 if (!response.ok) {
 const errorText = await response.text();
 
-```
+
 throw new Error(
   `Gemini ${model} HTTP ${response.status}: ${errorText}`
 );
-```
+
 
 }
 
@@ -315,7 +315,7 @@ let buffer = "";
 while (true) {
 const { value, done } = await reader.read();
 
-```
+
 if (done) {
   throw new Error(
     `Gemini ${model} encerrou sem retornar texto.`
@@ -346,7 +346,7 @@ for (const event of events) {
     };
   }
 }
-```
+
 
 }
 }
@@ -376,7 +376,7 @@ encoder.encode(
 );
 }
 
-```
+
   try {
     send({
       type: "text",
@@ -443,7 +443,7 @@ encoder.encode(
     controller.close();
   }
 }
-```
+
 
 });
 
@@ -472,7 +472,7 @@ error:
 );
 }
 
-```
+
 const body = await request.json();
 
 const userId = String(
@@ -625,7 +625,7 @@ return createClientStream(
   userMessage,
   context
 );
-```
+
 
 } catch (error) {
 return jsonResponse(
