@@ -54,7 +54,9 @@ const result = await env.DB
 .bind(userId)
 .all();
 
+
 return (result.results || []).map(row => row.memory);
+
 
 } catch {
 return [];
@@ -80,7 +82,15 @@ if (!env.DB || !userId) return;
 try {
 await env.DB
 .prepare(
-DELETE FROM memories WHERE user_id = ? AND id NOT IN ( SELECT id FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 50 )
+`DELETE FROM memories
+         WHERE user_id = ?
+         AND id NOT IN (
+           SELECT id
+           FROM memories
+           WHERE user_id = ?
+           ORDER BY id DESC
+           LIMIT 50
+         )`
 )
 .bind(userId, userId)
 .run();
@@ -116,7 +126,7 @@ Não invente informações.
 
 try {
 const response = await fetch(
-https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY},
+`https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY}`,
 {
 method: "POST",
 headers: {
@@ -148,6 +158,7 @@ maxOutputTokens: 100
 }
 );
 
+
 if (!response.ok) return;
 
 const data = await response.json();
@@ -161,28 +172,15 @@ if (
   memory.length > 3 &&
   memory.length < 500
 ) {
-  await saveMemory(
-    env,
-    userId,
-    memory
-  );
-
-  await cleanMemory(
-    env,
-    userId
-  );
+  await saveMemory(env, userId, memory);
+  await cleanMemory(env, userId);
 }
+
 
 } catch {}
 }
 
-function createGeminiRequest(
-env,
-model,
-messages,
-memories,
-signal
-) {
+function buildContents(messages, memories) {
 const contents = [];
 
 if (memories.length) {
@@ -192,12 +190,11 @@ parts: [
 {
 text:
 "Memórias relevantes sobre o usuário:\n" +
-memories
-.map(m => - ${m})
-.join("\n")
+memories.map(m => `- ${m}`).join("\n")
 }
 ]
 });
+
 
 contents.push({
   role: "model",
@@ -209,32 +206,33 @@ contents.push({
   ]
 });
 
+
 }
 
 for (const message of messages) {
 if (
 !message ||
 !message.content ||
-!["user", "model", "assistant"].includes(
-message.role
-)
+!["user", "model", "assistant"].includes(message.role)
 ) {
 continue;
 }
 
+
+const role =
+  message.role === "assistant"
+    ? "model"
+    : message.role;
+
 contents.push({
-  role:
-    message.role === "assistant"
-      ? "model"
-      : message.role,
+  role,
   parts: [
     {
-      text: String(
-        message.content
-      )
+      text: String(message.content)
     }
   ]
 });
+
 
 }
 
@@ -249,8 +247,24 @@ text: "Olá"
 });
 }
 
+return contents;
+}
+
+function createGeminiRequest(
+env,
+model,
+messages,
+memories,
+signal
+) {
+const contents =
+buildContents(
+messages,
+memories
+);
+
 return fetch(
-https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${env.GEMINI_API_KEY},
+`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${env.GEMINI_API_KEY}`,
 {
 method: "POST",
 headers: {
@@ -277,78 +291,19 @@ maxOutputTokens: 300
 );
 }
 
-function createGeminiFallbackRequest(
+async function createFallbackRequest(
 env,
 messages,
 memories
 ) {
-const contents = [];
-
-if (memories.length) {
-contents.push({
-role: "user",
-parts: [
-{
-text:
-"Memórias relevantes sobre o usuário:\n" +
+const contents =
+buildContents(
+messages,
 memories
-.map(m => - ${m})
-.join("\n")
-}
-]
-});
-
-contents.push({
-  role: "model",
-  parts: [
-    {
-      text:
-        "Entendido. Vou usar essas memórias quando forem relevantes."
-    }
-  ]
-});
-
-}
-
-for (const message of messages) {
-if (
-!message ||
-!message.content
-) {
-continue;
-}
-
-contents.push({
-  role:
-    message.role === "assistant"
-      ? "model"
-      : message.role === "model"
-        ? "model"
-        : "user",
-  parts: [
-    {
-      text: String(
-        message.content
-      )
-    }
-  ]
-});
-
-}
-
-if (!contents.length) {
-contents.push({
-role: "user",
-parts: [
-{
-text: "Olá"
-}
-]
-});
-}
+);
 
 return fetch(
-https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY},
+`https://generativelanguage.googleapis.com/v1beta/models/${LAST_FALLBACK}:generateContent?key=${env.GEMINI_API_KEY}`,
 {
 method: "POST",
 headers: {
@@ -372,7 +327,8 @@ maxOutputTokens: 300
 }
 
 function parseSSEEvent(raw) {
-const lines = raw.split(/\r?\n/);
+const lines =
+raw.split(/\r?\n/);
 
 let data = "";
 
@@ -395,8 +351,7 @@ return null;
 
 function extractText(data) {
 const parts =
-data?.candidates?.[0]?.content?.parts ||
-[];
+data?.candidates?.[0]?.content?.parts || [];
 
 let text = "";
 
@@ -405,11 +360,13 @@ if (part?.thought === true) {
 continue;
 }
 
+
 if (
   typeof part?.text === "string"
 ) {
   text += part.text;
 }
+
 
 }
 
@@ -424,15 +381,17 @@ if (!response.ok) {
 const errorText =
 await response.text();
 
+
 throw new Error(
   `Gemini ${model} HTTP ${response.status}: ${errorText}`
 );
+
 
 }
 
 if (!response.body) {
 throw new Error(
-Gemini ${model} não retornou um corpo de resposta.
+`Gemini ${model} não retornou um corpo de resposta.`
 );
 }
 
@@ -450,21 +409,24 @@ value,
 done
 } = await reader.read();
 
+
 if (done) {
-  const finalData =
-    parseSSEEvent(buffer);
+  if (buffer) {
+    const finalData =
+      parseSSEEvent(buffer);
 
-  if (finalData) {
-    const finalText =
-      extractText(finalData);
+    if (finalData) {
+      const finalText =
+        extractText(finalData);
 
-    if (finalText) {
-      return {
-        reader,
-        decoder,
-        buffer: "",
-        firstText: finalText
-      };
+      if (finalText) {
+        return {
+          reader,
+          decoder,
+          buffer: "",
+          firstText: finalText
+        };
+      }
     }
   }
 
@@ -473,15 +435,18 @@ if (done) {
   );
 }
 
-buffer += decoder.decode(
-  value,
-  {
-    stream: true
-  }
-);
+buffer +=
+  decoder.decode(
+    value,
+    {
+      stream: true
+    }
+  );
 
 const events =
-  buffer.split(/\r?\n\r?\n/);
+  buffer.split(
+    /\r?\n\r?\n/
+  );
 
 buffer =
   events.pop() || "";
@@ -504,6 +469,7 @@ for (const event of events) {
     };
   }
 }
+
 
 }
 }
@@ -531,10 +497,11 @@ async start(controller) {
 function send(data) {
 controller.enqueue(
 encoder.encode(
-data: ${JSON.stringify(data)}\n\n
+`data: ${JSON.stringify(data)}\n\n`
 )
 );
 }
+
 
     try {
       send({
@@ -549,8 +516,7 @@ data: ${JSON.stringify(data)}\n\n
         const {
           value,
           done
-        } =
-          await reader.read();
+        } = await reader.read();
 
         if (done) {
           break;
@@ -572,23 +538,16 @@ data: ${JSON.stringify(data)}\n\n
         localBuffer =
           events.pop() || "";
 
-        for (
-          const event
-          of events
-        ) {
+        for (const event of events) {
           const data =
-            parseSSEEvent(
-              event
-            );
+            parseSSEEvent(event);
 
           if (!data) {
             continue;
           }
 
           const text =
-            extractText(
-              data
-            );
+            extractText(data);
 
           if (!text) {
             continue;
@@ -611,9 +570,7 @@ data: ${JSON.stringify(data)}\n\n
 
         if (data) {
           const text =
-            extractText(
-              data
-            );
+            extractText(data);
 
           if (text) {
             fullText += text;
@@ -657,6 +614,7 @@ data: ${JSON.stringify(data)}\n\n
   }
 });
 
+
 return new Response(
 stream,
 {
@@ -681,7 +639,7 @@ userMessage,
 executionContext
 ) {
 const response =
-await createGeminiFallbackRequest(
+await createFallbackRequest(
 env,
 messages,
 memories
@@ -691,47 +649,53 @@ if (!response.ok) {
 const errorText =
 await response.text();
 
+
 throw new Error(
   `Gemini ${LAST_FALLBACK} HTTP ${response.status}: ${errorText}`
 );
+
 
 }
 
 const data =
 await response.json();
 
+const parts =
+data?.candidates?.[0]?.content?.parts || [];
+
 const text =
-data?.candidates?.[0]?.content?.parts
-?.filter(
+parts
+.filter(
 part =>
 part?.thought !== true &&
 typeof part?.text === "string"
 )
-?.map(
+.map(
 part => part.text
 )
-?.join("") || "";
+.join("");
 
 if (!text.trim()) {
 throw new Error(
-Gemini ${LAST_FALLBACK} respondeu sem texto.
+`Gemini ${LAST_FALLBACK} respondeu sem texto.`
 );
 }
 
 const encoder =
 new TextEncoder();
 
-const fullText =
-text;
-
 const stream =
 new ReadableStream({
 start(controller) {
 controller.enqueue(
 encoder.encode(
-data: ${JSON.stringify({ type: "text", text: fullText })}\n\n
+`data: ${JSON.stringify({
+              type: "text",
+              text
+            })}\n\n`
 )
 );
+
 
     controller.enqueue(
       encoder.encode(
@@ -749,7 +713,7 @@ data: ${JSON.stringify({ type: "text", text: fullText })}\n\n
           env,
           userId,
           userMessage,
-          fullText
+          text
         )
       );
     }
@@ -757,6 +721,7 @@ data: ${JSON.stringify({ type: "text", text: fullText })}\n\n
     controller.close();
   }
 });
+
 
 return new Response(
 stream,
@@ -791,6 +756,7 @@ error:
 500
 );
 }
+
 
 const body =
   await request.json();
@@ -829,8 +795,7 @@ if (
   directMessage &&
   !incomingMessages.some(
     message =>
-      message?.role ===
-        "user" &&
+      message?.role === "user" &&
       String(
         message?.content || ""
       ) === directMessage
@@ -851,8 +816,7 @@ const userMessage =
   incomingMessages
     .filter(
       message =>
-        message?.role ===
-        "user"
+        message?.role === "user"
     )
     .at(-1)?.content ||
   "";
@@ -860,21 +824,23 @@ const userMessage =
 const messages =
   incomingMessages
     .slice(-6)
-    .map(message => ({
-      role:
-        message?.role ===
-        "assistant"
-          ? "assistant"
-          : message?.role ===
-              "model"
-            ? "model"
-            : "user",
-      content:
-        String(
-          message?.content ||
-            ""
-        ).trim()
-    }))
+    .map(
+      message => ({
+        role:
+          message?.role ===
+          "assistant"
+            ? "assistant"
+            : message?.role ===
+                "model"
+              ? "model"
+              : "user",
+        content:
+          String(
+            message?.content ||
+              ""
+          ).trim()
+      })
+    )
     .filter(
       message =>
         message.content
@@ -914,8 +880,7 @@ const attempts =
           model,
           messages,
           memories,
-          controllers[index]
-            .signal
+          controllers[index].signal
         );
 
       if (!response.ok) {
@@ -989,6 +954,7 @@ return createFallbackClientResponse(
   userMessage,
   context
 );
+
 
 } catch (error) {
 return jsonResponse(
