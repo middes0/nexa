@@ -11,14 +11,111 @@ const USER_ID_KEY = "nexa_user_id";
 const history = [];
 
 /*
-  ID permanente deste navegador.
-
-  Ele NÃO é seu nome, e-mail ou qualquer dado pessoal.
-  Serve apenas para a NEXA reconhecer este navegador
-  e recuperar as memórias salvas no D1.
+  ================================
+  VOZ DA NEXA
+  ================================
 */
+
+let speechEnabled = true;
+let selectedVoice = null;
+
+function loadNexaVoice() {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  const voices =
+    window.speechSynthesis.getVoices();
+
+  if (!voices.length) {
+    return;
+  }
+
+  /*
+    Primeiro tenta encontrar uma voz
+    brasileira em português.
+  */
+  selectedVoice =
+    voices.find(voice =>
+      voice.lang.toLowerCase() === "pt-br"
+    ) ||
+    voices.find(voice =>
+      voice.lang.toLowerCase().startsWith("pt")
+    ) ||
+    null;
+}
+
+function speakNexa(text) {
+  if (
+    !speechEnabled ||
+    !("speechSynthesis" in window) ||
+    !text
+  ) {
+    return;
+  }
+
+  /*
+    Cancela uma fala anterior para
+    evitar duas falas ao mesmo tempo.
+  */
+  window.speechSynthesis.cancel();
+
+  const cleanText =
+    text
+      .replace(/[*_`#]/g, "")
+      .replace(/\n+/g, " ")
+      .trim();
+
+  if (!cleanText) {
+    return;
+  }
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      cleanText
+    );
+
+  utterance.lang = "pt-BR";
+
+  if (selectedVoice) {
+    utterance.voice =
+      selectedVoice;
+  }
+
+  /*
+    Ajustes iniciais da voz.
+  */
+  utterance.rate = 1.02;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  window.speechSynthesis.speak(
+    utterance
+  );
+}
+
+/*
+  Alguns navegadores carregam as vozes
+  de forma assíncrona.
+*/
+if ("speechSynthesis" in window) {
+  loadNexaVoice();
+
+  window.speechSynthesis.onvoiceschanged =
+    loadNexaVoice;
+}
+
+/*
+  ================================
+  ID PERMANENTE DO NAVEGADOR
+  ================================
+*/
+
 function getUserId() {
-  let userId = localStorage.getItem(USER_ID_KEY);
+  let userId =
+    localStorage.getItem(
+      USER_ID_KEY
+    );
 
   if (!userId) {
     userId =
@@ -46,7 +143,9 @@ function saveMemory() {
 function loadMemory() {
   try {
     const saved =
-      localStorage.getItem(MEMORY_KEY);
+      localStorage.getItem(
+        MEMORY_KEY
+      );
 
     if (!saved) {
       return;
@@ -95,7 +194,8 @@ function addMessage(text, type) {
   const paragraph =
     document.createElement("p");
 
-  paragraph.textContent = text;
+  paragraph.textContent =
+    text;
 
   message.appendChild(label);
   message.appendChild(paragraph);
@@ -194,6 +294,12 @@ function addAnimatedMessage(text) {
 
   function typeNextCharacter() {
     if (index >= text.length) {
+      /*
+        Só começa a falar depois que
+        a resposta terminou de aparecer.
+      */
+      speakNexa(text);
+
       return;
     }
 
@@ -235,13 +341,18 @@ function restoreConversation() {
 
 function clearConversation() {
   /*
-    IMPORTANTE:
-
-    Aqui apagamos somente a conversa local.
+    Apaga somente a conversa local.
 
     O USER_ID continua salvo.
     As memórias reais do D1 continuam intactas.
   */
+
+  /*
+    Também interrompe uma fala em andamento.
+  */
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
 
   history.length = 0;
 
@@ -275,16 +386,9 @@ async function askNexa(text) {
       body: JSON.stringify({
         message: text,
 
-        /*
-          Histórico da conversa atual
-        */
         history:
           history.slice(-12),
 
-        /*
-          Identificador permanente
-          deste navegador.
-        */
         userId
       })
     });
@@ -331,6 +435,15 @@ composer.addEventListener(
       sendButton.disabled
     ) {
       return;
+    }
+
+    /*
+      Garante que a fala anterior
+      seja interrompida quando uma
+      nova pergunta começar.
+    */
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
 
     addMessage(
