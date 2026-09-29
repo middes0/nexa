@@ -290,7 +290,7 @@ function addAnimatedMessage(text) {
 
   let index = 0;
 
-  const speed = 18;
+  const speed = 3;
 
   function typeNextCharacter() {
     if (index >= text.length) {
