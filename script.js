@@ -1,8 +1,10 @@
+```javascript
 const composer = document.getElementById("composer");
 const input = document.getElementById("messageInput");
 const chat = document.getElementById("chat");
 const micButton = document.getElementById("micButton");
 const sendButton = composer.querySelector('button[type="submit"]');
+const newChatButton = document.getElementById("newChatButton");
 
 const history = [];
 
@@ -42,6 +44,7 @@ function showTyping() {
 
   const typing = document.createElement("p");
   typing.className = "typing";
+
   typing.innerHTML = `
     <span></span>
     <span></span>
@@ -104,6 +107,22 @@ function addAnimatedMessage(text) {
   typeNextCharacter();
 }
 
+function clearConversation() {
+  history.length = 0;
+
+  hideTyping();
+
+  chat.innerHTML = `
+    <div class="message nexa">
+      <span class="label">NEXA</span>
+      <p>Conversa limpa. Tô pronta de novo — manda a boa.</p>
+    </div>
+  `;
+
+  input.value = "";
+  input.focus();
+}
+
 async function askNexa(text) {
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -157,6 +176,7 @@ composer.addEventListener("submit", async function (event) {
 
   sendButton.disabled = true;
   micButton.disabled = true;
+  newChatButton.disabled = true;
 
   showTyping();
 
@@ -165,15 +185,15 @@ composer.addEventListener("submit", async function (event) {
 
     hideTyping();
 
-   history.push({
-  role: "user",
-  content: text
-});
+    history.push({
+      role: "user",
+      content: text
+    });
 
-history.push({
-  role: "model",
-  content: reply
-});
+    history.push({
+      role: "model",
+      content: reply
+    });
 
     addAnimatedMessage(reply);
 
@@ -191,9 +211,12 @@ history.push({
   } finally {
     sendButton.disabled = false;
     micButton.disabled = false;
+    newChatButton.disabled = false;
     input.focus();
   }
 });
+
+newChatButton.addEventListener("click", clearConversation);
 
 micButton.addEventListener("click", function () {
   const SpeechRecognition =
@@ -237,3 +260,4 @@ micButton.addEventListener("click", function () {
 
   recognition.start();
 });
+```
