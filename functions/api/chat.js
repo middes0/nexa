@@ -211,11 +211,36 @@ contents.push({
 }
 
 for (const message of messages) {
+if (
+!message ||
+!message.content ||
+!["user", "model", "assistant"].includes(message.role)
+) {
+continue;
+}
+
+
 contents.push({
-role: message.role === "assistant" ? "model" : "user",
+  role:
+    message.role === "assistant"
+      ? "model"
+      : message.role,
+  parts: [
+    {
+      text: String(message.content)
+    }
+  ]
+});
+
+
+}
+
+if (!contents.length) {
+contents.push({
+role: "user",
 parts: [
 {
-text: String(message.content || "")
+text: "Olá"
 }
 ]
 });
@@ -386,7 +411,8 @@ encoder.encode(
     let localBuffer = buffer;
 
     while (true) {
-      const { value, done } = await reader.read();
+      const { value, done } =
+        await reader.read();
 
       if (done) break;
 
@@ -394,16 +420,20 @@ encoder.encode(
         stream: true
       });
 
-      const events = localBuffer.split("\n\n");
+      const events =
+        localBuffer.split("\n\n");
 
-      localBuffer = events.pop() || "";
+      localBuffer =
+        events.pop() || "";
 
       for (const event of events) {
-        const data = parseSSEEvent(event);
+        const data =
+          parseSSEEvent(event);
 
         if (!data) continue;
 
-        const text = extractText(data);
+        const text =
+          extractText(data);
 
         if (!text) continue;
 
@@ -479,28 +509,75 @@ const userId = String(
   body?.userId || ""
 );
 
-const incomingMessages =
-  Array.isArray(body?.messages)
-    ? body.messages
-    : [];
+let incomingMessages = [];
+
+if (Array.isArray(body?.messages)) {
+  incomingMessages = body.messages;
+} else if (Array.isArray(body?.history)) {
+  incomingMessages = body.history;
+}
+
+const directMessage =
+  typeof body?.message === "string"
+    ? body.message.trim()
+    : "";
+
+if (
+  directMessage &&
+  !incomingMessages.some(
+    message =>
+      message?.role === "user" &&
+      String(
+        message?.content || ""
+      ) === directMessage
+  )
+) {
+  incomingMessages = [
+    ...incomingMessages,
+    {
+      role: "user",
+      content: directMessage
+    }
+  ];
+}
 
 const userMessage =
+  directMessage ||
   incomingMessages
     .filter(
       message =>
         message?.role === "user"
     )
-    .at(-1)?.content || "";
+    .at(-1)?.content ||
+  "";
 
 const messages =
   incomingMessages
     .slice(-6)
     .map(message => ({
-      role: message.role,
+      role:
+        message?.role === "assistant"
+          ? "assistant"
+          : message?.role === "model"
+            ? "model"
+            : "user",
       content: String(
-        message.content || ""
-      )
-    }));
+        message?.content || ""
+      ).trim()
+    }))
+    .filter(
+      message => message.content
+    );
+
+if (!messages.length) {
+  return jsonResponse(
+    {
+      error:
+        "Nenhuma mensagem foi enviada para a NEXA."
+    },
+    400
+  );
+}
 
 const memoriesPromise =
   getMemories(env, userId);
