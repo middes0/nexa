@@ -97,7 +97,12 @@ await env.DB
 } catch {}
 }
 
-async function extractMemory(env, userId, userMessage, assistantMessage) {
+async function extractMemory(
+env,
+userId,
+userMessage,
+assistantMessage
+) {
 if (!env.GEMINI_API_KEY || !userId) return;
 
 const prompt = `
@@ -170,7 +175,13 @@ if (
 } catch {}
 }
 
-function createGeminiRequest(env, model, messages, memories) {
+function createGeminiRequest(
+env,
+model,
+messages,
+memories,
+signal
+) {
 const contents = [];
 
 if (memories.length) {
@@ -190,7 +201,8 @@ contents.push({
   role: "model",
   parts: [
     {
-      text: "Entendido. Vou usar essas memórias quando forem relevantes."
+      text:
+        "Entendido. Vou usar essas memórias quando forem relevantes."
     }
   ]
 });
@@ -216,6 +228,7 @@ method: "POST",
 headers: {
 "Content-Type": "application/json"
 },
+signal,
 body: JSON.stringify({
 systemInstruction: {
 parts: [
@@ -288,6 +301,12 @@ throw new Error(
 
 }
 
+if (!response.body) {
+throw new Error(
+`Gemini ${model} não retornou um corpo de resposta.`
+);
+}
+
 const reader = response.body.getReader();
 const decoder = new TextDecoder();
 
@@ -298,10 +317,14 @@ const { value, done } = await reader.read();
 
 ```
 if (done) {
-  throw new Error(`Gemini ${model} encerrou sem retornar texto.`);
+  throw new Error(
+    `Gemini ${model} encerrou sem retornar texto.`
+  );
 }
 
-buffer += decoder.decode(value, { stream: true });
+buffer += decoder.decode(value, {
+  stream: true
+});
 
 const events = buffer.split("\n\n");
 
@@ -331,7 +354,6 @@ for (const event of events) {
 async function createClientStream(
 env,
 model,
-response,
 reader,
 decoder,
 buffer,
@@ -348,7 +370,9 @@ const stream = new ReadableStream({
 async start(controller) {
 function send(data) {
 controller.enqueue(
-encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+encoder.encode(
+`data: ${JSON.stringify(data)}\n\n`
+)
 );
 }
 
@@ -411,7 +435,9 @@ encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
   } catch (error) {
     send({
       type: "error",
-      error: error?.message || "Erro durante a resposta."
+      error:
+        error?.message ||
+        "Erro durante a resposta."
     });
 
     controller.close();
@@ -423,8 +449,10 @@ encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
 
 return new Response(stream, {
 headers: {
-"Content-Type": "text/event-stream; charset=utf-8",
-"Cache-Control": "no-cache, no-transform",
+"Content-Type":
+"text/event-stream; charset=utf-8",
+"Cache-Control":
+"no-cache, no-transform",
 "Connection": "keep-alive"
 }
 });
@@ -437,7 +465,8 @@ try {
 if (!env.GEMINI_API_KEY) {
 return jsonResponse(
 {
-error: "GEMINI_API_KEY não configurada."
+error:
+"GEMINI_API_KEY não configurada."
 },
 500
 );
@@ -446,66 +475,98 @@ error: "GEMINI_API_KEY não configurada."
 ```
 const body = await request.json();
 
-const userId = String(body?.userId || "");
-const incomingMessages = Array.isArray(body?.messages)
-  ? body.messages
-  : [];
+const userId = String(
+  body?.userId || ""
+);
+
+const incomingMessages =
+  Array.isArray(body?.messages)
+    ? body.messages
+    : [];
 
 const userMessage =
   incomingMessages
-    .filter(message => message?.role === "user")
+    .filter(
+      message =>
+        message?.role === "user"
+    )
     .at(-1)?.content || "";
 
-const messages = incomingMessages
-  .slice(-6)
-  .map(message => ({
-    role: message.role,
-    content: String(message.content || "")
-  }));
+const messages =
+  incomingMessages
+    .slice(-6)
+    .map(message => ({
+      role: message.role,
+      content: String(
+        message.content || ""
+      )
+    }));
 
-const memories = await getMemories(env, userId);
+const memoriesPromise =
+  getMemories(env, userId);
 
-const controllers = MODELS.map(() => new AbortController());
-
-const attempts = MODELS.map(async (model, index) => {
-  const response = await createGeminiRequest(
-    env,
-    model,
-    messages,
-    memories
+const controllers =
+  MODELS.map(
+    () => new AbortController()
   );
 
-  if (!response.ok) {
-    const errorText = await response.text();
+const memories =
+  await memoriesPromise;
 
-    throw new Error(
-      `Gemini ${model} HTTP ${response.status}: ${errorText}`
-    );
+const attempts = MODELS.map(
+  async (model, index) => {
+    const response =
+      await createGeminiRequest(
+        env,
+        model,
+        messages,
+        memories,
+        controllers[index].signal
+      );
+
+    if (!response.ok) {
+      const errorText =
+        await response.text();
+
+      throw new Error(
+        `Gemini ${model} HTTP ${response.status}: ${errorText}`
+      );
+    }
+
+    const result =
+      await waitForFirstText(
+        response,
+        model
+      );
+
+    return {
+      ...result,
+      model,
+      controller:
+        controllers[index]
+    };
   }
-
-  const result = await waitForFirstText(
-    response,
-    model
-  );
-
-  return {
-    ...result,
-    model,
-    controller: controllers[index]
-  };
-});
+);
 
 let winner;
 
 try {
-  winner = await Promise.any(attempts);
+  winner = await Promise.any(
+    attempts
+  );
 } catch {
   winner = null;
 }
 
 if (winner) {
-  for (const controller of controllers) {
-    if (controller !== winner.controller) {
+  for (
+    const controller
+    of controllers
+  ) {
+    if (
+      controller !==
+      winner.controller
+    ) {
       try {
         controller.abort();
       } catch {}
@@ -515,7 +576,6 @@ if (winner) {
   return createClientStream(
     env,
     winner.model,
-    null,
     winner.reader,
     winner.decoder,
     winner.buffer,
@@ -526,33 +586,37 @@ if (winner) {
   );
 }
 
-const fallbackResponse = await createGeminiRequest(
-  env,
-  LAST_FALLBACK,
-  messages,
-  memories
-);
+const fallbackResponse =
+  await createGeminiRequest(
+    env,
+    LAST_FALLBACK,
+    messages,
+    memories
+  );
 
 if (!fallbackResponse.ok) {
-  const errorText = await fallbackResponse.text();
+  const errorText =
+    await fallbackResponse.text();
 
   return jsonResponse(
     {
-      error: `Todos os modelos falharam. Último erro: ${errorText}`
+      error:
+        `Todos os modelos falharam. ` +
+        `Último erro: ${errorText}`
     },
     503
   );
 }
 
-const fallback = await waitForFirstText(
-  fallbackResponse,
-  LAST_FALLBACK
-);
+const fallback =
+  await waitForFirstText(
+    fallbackResponse,
+    LAST_FALLBACK
+  );
 
 return createClientStream(
   env,
   LAST_FALLBACK,
-  null,
   fallback.reader,
   fallback.decoder,
   fallback.buffer,
