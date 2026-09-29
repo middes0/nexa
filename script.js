@@ -5,7 +5,42 @@ const micButton = document.getElementById("micButton");
 const sendButton = composer.querySelector('button[type="submit"]');
 const newChatButton = document.getElementById("newChatButton");
 
+const MEMORY_KEY = "nexa_conversation";
 const history = [];
+
+function saveMemory() {
+  localStorage.setItem(
+    MEMORY_KEY,
+    JSON.stringify(history)
+  );
+}
+
+function loadMemory() {
+  try {
+    const saved = localStorage.getItem(MEMORY_KEY);
+
+    if (!saved) {
+      return;
+    }
+
+    const savedHistory = JSON.parse(saved);
+
+    if (!Array.isArray(savedHistory)) {
+      return;
+    }
+
+    history.push(
+      ...savedHistory.filter(item =>
+        item &&
+        typeof item.role === "string" &&
+        typeof item.content === "string"
+      )
+    );
+
+  } catch (error) {
+    console.error("Erro ao carregar memória:", error);
+  }
+}
 
 function addMessage(text, type) {
   const message = document.createElement("div");
@@ -105,14 +140,32 @@ function addAnimatedMessage(text) {
   typeNextCharacter();
 }
 
+function restoreConversation() {
+  if (history.length === 0) {
+    return;
+  }
+
+  chat.innerHTML = "";
+
+  history.forEach(item => {
+    addMessage(
+      item.content,
+      item.role === "user" ? "user" : "nexa"
+    );
+  });
+}
+
 function clearConversation() {
   history.length = 0;
+
+  localStorage.removeItem(MEMORY_KEY);
+
   hideTyping();
 
   chat.innerHTML = `
     <div class="message nexa">
       <span class="label">NEXA</span>
-      <p>Conversa limpa. Tô pronta de novo — manda a boa.</p>
+      <p>Conversa limpa. Minha memória dessa conversa foi apagada. Manda a boa.</p>
     </div>
   `;
 
@@ -192,6 +245,8 @@ composer.addEventListener("submit", async function (event) {
       content: reply
     });
 
+    saveMemory();
+
     addAnimatedMessage(reply);
 
   } catch (error) {
@@ -213,7 +268,10 @@ composer.addEventListener("submit", async function (event) {
   }
 });
 
-newChatButton.addEventListener("click", clearConversation);
+newChatButton.addEventListener(
+  "click",
+  clearConversation
+);
 
 micButton.addEventListener("click", function () {
   const SpeechRecognition =
@@ -239,7 +297,9 @@ micButton.addEventListener("click", function () {
   };
 
   recognition.onresult = function (event) {
-    input.value = event.results[0][0].transcript;
+    input.value =
+      event.results[0][0].transcript;
+
     input.focus();
   };
 
@@ -257,3 +317,6 @@ micButton.addEventListener("click", function () {
 
   recognition.start();
 });
+
+loadMemory();
+restoreConversation();
