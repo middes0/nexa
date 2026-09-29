@@ -30,7 +30,7 @@ Não prolongue respostas simples.
 
 /*
 ============================================================
-JSON
+RESPOSTA JSON
 ============================================================
 */
 
@@ -40,10 +40,8 @@ function json(data, status = 200) {
     {
       status,
       headers: {
-        "Content-Type":
-          "application/json; charset=utf-8",
-        "Cache-Control":
-          "no-store"
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
       }
     }
   );
@@ -51,12 +49,14 @@ function json(data, status = 200) {
 
 /*
 ============================================================
-MEMÓRIA
+MEMÓRIA — BUSCAR
 ============================================================
 */
 
 async function getMemories(db, userId) {
-  if (!db) return [];
+  if (!db) {
+    return [];
+  }
 
   try {
     const result = await db
@@ -88,12 +88,20 @@ async function getMemories(db, userId) {
   }
 }
 
+/*
+============================================================
+MEMÓRIA — SALVAR
+============================================================
+*/
+
 async function saveMemory(
   db,
   userId,
   memory
 ) {
-  if (!db || !memory) return;
+  if (!db || !memory) {
+    return;
+  }
 
   try {
     const existing = await db
@@ -110,7 +118,9 @@ async function saveMemory(
       )
       .first();
 
-    if (existing) return;
+    if (existing) {
+      return;
+    }
 
     await db
       .prepare(`
@@ -141,7 +151,9 @@ LIMPEZA DA MEMÓRIA
 */
 
 function cleanMemory(text) {
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
   const memory =
     text
@@ -215,8 +227,7 @@ async function extractMemory(
   }
 
   /*
-    Nome é detectado sem
-    chamar outra IA.
+    Nome detectado sem outra chamada de IA.
   */
 
   const nameMatch =
@@ -321,7 +332,6 @@ ${message}
             ],
 
             generationConfig: {
-              temperature: 0,
               maxOutputTokens: 60
             }
           })
@@ -359,7 +369,7 @@ ${message}
 
 /*
 ============================================================
-STREAM GEMINI
+GEMINI STREAMING
 ============================================================
 */
 
@@ -398,11 +408,11 @@ ${memories
           "Content-Type":
             "application/json",
 
-          "x-goog-api-key":
-            env.GEMINI_API_KEY,
-
           "Accept":
-            "text/event-stream"
+            "text/event-stream",
+
+          "x-goog-api-key":
+            env.GEMINI_API_KEY
         },
 
         body: JSON.stringify({
@@ -431,8 +441,6 @@ ${memories
           ],
 
           generationConfig: {
-            temperature: 0.7,
-
             maxOutputTokens: 400,
 
             thinkingConfig: {
@@ -443,12 +451,17 @@ ${memories
       }
     );
 
+  /*
+    Se o Gemini rejeitar a requisição,
+    devolve o erro real.
+  */
+
   if (!response.ok) {
     const errorText =
       await response.text();
 
     console.error(
-      "Gemini streaming HTTP error:",
+      "Gemini HTTP ERROR:",
       response.status,
       errorText
     );
@@ -464,17 +477,16 @@ ${memories
     );
   }
 
-  /*
-    Stream de saída para o navegador.
-  */
-
   const encoder =
     new TextEncoder();
 
   const decoder =
     new TextDecoder();
 
-  const { readable, writable } =
+  const {
+    readable,
+    writable
+  } =
     new TransformStream();
 
   const writer =
@@ -487,7 +499,9 @@ ${memories
   let fullReply = "";
 
   /*
-    Envia um evento SSE para o frontend.
+  ==========================================================
+  ENVIA EVENTO PARA O FRONTEND
+  ==========================================================
   */
 
   async function sendEvent(data) {
@@ -499,14 +513,21 @@ ${memories
   }
 
   /*
-    Processa uma resposta JSON
-    enviada pelo Gemini.
+  ==========================================================
+  PROCESSA UM JSON DO GEMINI
+  ==========================================================
   */
 
   async function processGeminiData(
-    jsonText
+    dataText
   ) {
-    if (!jsonText) {
+    if (!dataText) {
+      return;
+    }
+
+    if (
+      dataText === "[DONE]"
+    ) {
       return;
     }
 
@@ -514,14 +535,26 @@ ${memories
 
     try {
       data =
-        JSON.parse(jsonText);
-    } catch (error) {
+        JSON.parse(dataText);
+    } catch {
       console.error(
-        "JSON SSE inválido:",
-        jsonText
+        "Gemini enviou JSON inválido:",
+        dataText
       );
 
       return;
+    }
+
+    /*
+      Caso o Gemini retorne erro
+      dentro do stream.
+    */
+
+    if (data?.error) {
+      throw new Error(
+        data.error.message ||
+        "Erro retornado pelo Gemini."
+      );
     }
 
     const candidates =
@@ -547,8 +580,7 @@ ${memories
         of parts
       ) {
         /*
-          Nunca envia pensamento
-          para o navegador.
+          Ignora pensamento.
         */
 
         if (
@@ -564,31 +596,25 @@ ${memories
           continue;
         }
 
-        const text =
-          part.text;
-
-        if (!text) {
+        if (!part.text) {
           continue;
         }
 
-        fullReply += text;
+        fullReply +=
+          part.text;
 
         await sendEvent({
           type: "text",
-          text
+          text: part.text
         });
       }
     }
   }
 
   /*
-    Processa eventos SSE.
-
-    O Gemini usa:
-      data: {...}
-
-    e separa eventos por
-    linha em branco.
+  ==========================================================
+  PROCESSA SSE
+  ==========================================================
   */
 
   async function processSSE(
@@ -604,8 +630,11 @@ ${memories
       const trimmed =
         line.trim();
 
+      if (!trimmed) {
+        continue;
+      }
+
       if (
-        !trimmed ||
         trimmed.startsWith(":")
       ) {
         continue;
@@ -628,13 +657,6 @@ ${memories
         continue;
       }
 
-      if (
-        dataText ===
-        "[DONE]"
-      ) {
-        continue;
-      }
-
       await processGeminiData(
         dataText
       );
@@ -642,269 +664,144 @@ ${memories
   }
 
   /*
-    Faz a leitura do Gemini
-    continuamente.
+  ==========================================================
+  LÊ O STREAM
+  ==========================================================
   */
 
-  const streamTask =
-    (async () => {
-      try {
-        while (true) {
-          const {
-            value,
-            done
-          } =
-            await reader.read();
+  (async () => {
+    try {
+      while (true) {
+        const {
+          value,
+          done
+        } =
+          await reader.read();
 
-          if (done) {
-            break;
-          }
-
-          buffer +=
-            decoder.decode(
-              value,
-              {
-                stream: true
-              }
-            );
-
-          /*
-            O SSE pode chegar quebrado
-            em vários pedaços.
-
-            Por isso só processamos
-            eventos completos.
-          */
-
-          const events =
-            buffer.split(
-              /\r?\n\r?\n/
-            );
-
-          buffer =
-            events.pop() || "";
-
-          for (
-            const event
-            of events
-          ) {
-            await processSSE(
-              event
-            );
-          }
+        if (done) {
+          break;
         }
-
-        /*
-          Finaliza o decoder.
-        */
 
         buffer +=
-          decoder.decode();
+          decoder.decode(
+            value,
+            {
+              stream: true
+            }
+          );
 
-        if (buffer.trim()) {
+        /*
+          Um chunk de rede pode conter
+          metade de um evento ou vários.
+        */
+
+        const events =
+          buffer.split(
+            /\r?\n\r?\n/
+          );
+
+        buffer =
+          events.pop() || "";
+
+        for (
+          const event
+          of events
+        ) {
           await processSSE(
-            buffer
+            event
           );
         }
+      }
 
-        /*
-          Verificação importante:
-          se o Gemini não produziu
-          texto, informa o erro.
-        */
+      /*
+        Finaliza bytes restantes.
+      */
 
-        if (
-          !fullReply.trim()
-        ) {
-          throw new Error(
-            "Gemini encerrou o streaming sem retornar texto."
-          );
-        }
+      buffer +=
+        decoder.decode();
 
-        /*
-          Memória é processada
-          fora do caminho crítico.
-        */
+      if (buffer.trim()) {
+        await processSSE(
+          buffer
+        );
+      }
 
-        if (
-          context.waitUntil &&
-          context.env.DB
-        ) {
-          context.waitUntil(
-            (async () => {
-              const memory =
-                await extractMemory(
-                  context.env,
-                  message
-                );
+      /*
+        Nenhum texto significa
+        que algo deu errado.
+      */
 
-              if (memory) {
-                await saveMemory(
-                  context.env.DB,
-                  userId,
-                  memory
-                );
-              }
-            })()
-          );
-        }
+      if (!fullReply.trim()) {
+        throw new Error(
+          "O Gemini encerrou o stream sem retornar texto."
+        );
+      }
 
+      /*
+        Memória continua fora
+        do caminho crítico.
+      */
+
+      if (
+        context.waitUntil &&
+        context.env.DB
+      ) {
+        context.waitUntil(
+          (async () => {
+            const memory =
+              await extractMemory(
+                context.env,
+                message
+              );
+
+            if (memory) {
+              await saveMemory(
+                context.env.DB,
+                userId,
+                memory
+              );
+            }
+          })()
+        );
+      }
+
+      await sendEvent({
+        type: "done",
+        provider: "gemini",
+        model: PRIMARY_MODEL
+      });
+
+      await writer.close();
+
+      console.log(
+        `NEXA streaming terminou: ${fullReply.length} caracteres`
+      );
+
+    } catch (error) {
+      console.error(
+        "Gemini streaming error:",
+        error?.message
+      );
+
+      try {
         await sendEvent({
-          type: "done",
-          provider: "gemini",
-          model: PRIMARY_MODEL
+          type: "error",
+          error:
+            error?.message ||
+            "Erro durante o streaming do Gemini."
         });
 
         await writer.close();
 
-        console.log(
-          `NEXA streaming terminou: ${fullReply.length} caracteres`
-        );
-
-      } catch (error) {
-        console.error(
-          "Erro no stream Gemini:",
-          error?.message
-        );
-
-        try {
-          await sendEvent({
-            type: "error",
-            error:
-              error?.message ||
-              "Erro durante o streaming."
-          });
-
-          await writer.close();
-
-        } catch {
-          /*
-            O stream pode já ter
-            sido encerrado.
-          */
-        }
+      } catch {
+        /*
+          Stream já pode ter sido fechado.
+        */
       }
-    })();
-
-  /*
-    Não esperamos o stream terminar.
-    A resposta é devolvida imediatamente
-    ao navegador.
-  */
-
-  void streamTask;
+    }
+  })();
 
   return readable;
-}
-
-/*
-============================================================
-OPENAI FALLBACK
-============================================================
-*/
-
-async function askOpenAI(
-  env,
-  message,
-  history,
-  memories
-) {
-  if (!env.OPENAI_API_KEY) {
-    throw new Error(
-      "OPENAI_API_KEY não configurada."
-    );
-  }
-
-  const memoryText =
-    memories.length
-      ? `
-Memórias do usuário:
-${memories
-  .map(
-    memory =>
-      `- ${memory}`
-  )
-  .join("\n")}
-`
-      : "";
-
-  const response =
-    await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "Authorization":
-            `Bearer ${env.OPENAI_API_KEY}`
-        },
-
-        body: JSON.stringify({
-          model:
-            "gpt-5.6-luna",
-
-          input: [
-            {
-              role: "developer",
-
-              content:
-                SYSTEM_PROMPT +
-                memoryText
-            },
-
-            ...history.map(
-              item => ({
-                role:
-                  item.role ===
-                  "model"
-                    ? "assistant"
-                    : "user",
-
-                content:
-                  item.parts?.[0]
-                    ?.text ||
-                  ""
-              })
-            ),
-
-            {
-              role: "user",
-              content: message
-            }
-          ],
-
-          max_output_tokens: 400
-        })
-      }
-    );
-
-  const data =
-    await response
-      .json()
-      .catch(
-        () => ({})
-      );
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error?.message ||
-      `OpenAI HTTP ${response.status}`
-    );
-  }
-
-  const reply =
-    data?.output_text?.trim();
-
-  if (!reply) {
-    throw new Error(
-      "OpenAI não retornou texto."
-    );
-  }
-
-  return reply;
 }
 
 /*
@@ -921,7 +818,7 @@ export async function onRequestPost(
 
   try {
     /*
-      Verifica a chave.
+      Verifica a API key.
     */
 
     if (
@@ -930,14 +827,14 @@ export async function onRequestPost(
       return json(
         {
           error:
-            "GEMINI_API_KEY não está configurada."
+            "GEMINI_API_KEY não está configurada no Cloudflare."
         },
         500
       );
     }
 
     /*
-      Lê o corpo.
+      Lê JSON.
     */
 
     const body =
@@ -960,7 +857,7 @@ export async function onRequestPost(
     }
 
     /*
-      ID permanente do usuário.
+      ID permanente.
     */
 
     const userId =
@@ -971,7 +868,7 @@ export async function onRequestPost(
         : "default-user";
 
     /*
-      Últimas 6 mensagens.
+      Histórico limitado.
     */
 
     const history =
@@ -984,7 +881,8 @@ export async function onRequestPost(
               item =>
                 item &&
                 typeof item.content ===
-                  "string"
+                  "string" &&
+                item.content.trim()
             )
             .map(
               item => ({
@@ -1007,8 +905,7 @@ export async function onRequestPost(
         : [];
 
     /*
-      Busca memória antes
-      de chamar o Gemini.
+      Memórias.
     */
 
     const memories =
@@ -1050,102 +947,31 @@ export async function onRequestPost(
             "Cache-Control":
               "no-cache, no-store, must-revalidate",
 
-            "Connection":
-              "keep-alive",
-
             "X-Accel-Buffering":
               "no"
           }
         }
       );
 
-    } catch (geminiError) {
+    } catch (error) {
       /*
-        Só cai aqui se o Gemini
-        falhar antes do stream.
+        Retorna o erro REAL.
+        Não esconde atrás de uma mensagem genérica.
       */
 
       console.error(
-        "Gemini falhou:",
-        geminiError?.message
+        "GEMINI FAILED:",
+        error?.message
       );
 
-      /*
-        Fallback OpenAI.
-      */
-
-      try {
-        const reply =
-          await askOpenAI(
-            context.env,
-            message,
-            history,
-            memories
-          );
-
-        const encoder =
-          new TextEncoder();
-
-        const fallback =
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "text",
-                    text: reply
-                  })}\n\n`
-                )
-              );
-
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "done",
-                    provider: "openai"
-                  })}\n\n`
-                )
-              );
-
-              controller.close();
-            }
-          });
-
-        return new Response(
-          fallback,
-          {
-            status: 200,
-
-            headers: {
-              "Content-Type":
-                "text/event-stream; charset=utf-8",
-
-              "Cache-Control":
-                "no-cache, no-store, must-revalidate",
-
-              "Connection":
-                "keep-alive",
-
-              "X-Accel-Buffering":
-                "no"
-            }
-          }
-        );
-
-      } catch (openaiError) {
-        console.error(
-          "OpenAI também falhou:",
-          openaiError?.message
-        );
-
-        return json(
-          {
-            error:
-              "A NEXA não conseguiu responder agora."
-          },
-          503
-        );
-      }
+      return json(
+        {
+          error:
+            error?.message ||
+            "Erro desconhecido no Gemini."
+        },
+        502
+      );
     }
 
   } catch (error) {
