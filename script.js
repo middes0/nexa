@@ -6,7 +6,35 @@ const sendButton = composer.querySelector('button[type="submit"]');
 const newChatButton = document.getElementById("newChatButton");
 
 const MEMORY_KEY = "nexa_conversation";
+const USER_ID_KEY = "nexa_user_id";
+
 const history = [];
+
+/*
+  ID permanente deste navegador.
+
+  Ele NÃO é seu nome, e-mail ou qualquer dado pessoal.
+  Serve apenas para a NEXA reconhecer este navegador
+  e recuperar as memórias salvas no D1.
+*/
+function getUserId() {
+  let userId = localStorage.getItem(USER_ID_KEY);
+
+  if (!userId) {
+    userId =
+      "user_" +
+      crypto.randomUUID();
+
+    localStorage.setItem(
+      USER_ID_KEY,
+      userId
+    );
+  }
+
+  return userId;
+}
+
+const userId = getUserId();
 
 function saveMemory() {
   localStorage.setItem(
@@ -17,13 +45,15 @@ function saveMemory() {
 
 function loadMemory() {
   try {
-    const saved = localStorage.getItem(MEMORY_KEY);
+    const saved =
+      localStorage.getItem(MEMORY_KEY);
 
     if (!saved) {
       return;
     }
 
-    const savedHistory = JSON.parse(saved);
+    const savedHistory =
+      JSON.parse(saved);
 
     if (!Array.isArray(savedHistory)) {
       return;
@@ -38,23 +68,38 @@ function loadMemory() {
     );
 
   } catch (error) {
-    console.error("Erro ao carregar memória:", error);
+    console.error(
+      "Erro ao carregar memória:",
+      error
+    );
   }
 }
 
 function addMessage(text, type) {
-  const message = document.createElement("div");
-  message.className = "message " + type;
+  const message =
+    document.createElement("div");
 
-  const label = document.createElement("span");
+  message.className =
+    "message " + type;
+
+  const label =
+    document.createElement("span");
+
   label.className = "label";
-  label.textContent = type === "user" ? "VOCÊ" : "NEXA";
 
-  const paragraph = document.createElement("p");
+  label.textContent =
+    type === "user"
+      ? "VOCÊ"
+      : "NEXA";
+
+  const paragraph =
+    document.createElement("p");
+
   paragraph.textContent = text;
 
   message.appendChild(label);
   message.appendChild(paragraph);
+
   chat.appendChild(message);
 
   message.scrollIntoView({
@@ -64,19 +109,32 @@ function addMessage(text, type) {
 }
 
 function showTyping() {
-  if (document.getElementById("nexaTyping")) {
+  if (
+    document.getElementById(
+      "nexaTyping"
+    )
+  ) {
     return;
   }
 
-  const message = document.createElement("div");
-  message.className = "message nexa typing-message";
-  message.id = "nexaTyping";
+  const message =
+    document.createElement("div");
 
-  const label = document.createElement("span");
+  message.className =
+    "message nexa typing-message";
+
+  message.id =
+    "nexaTyping";
+
+  const label =
+    document.createElement("span");
+
   label.className = "label";
   label.textContent = "NEXA";
 
-  const typing = document.createElement("p");
+  const typing =
+    document.createElement("p");
+
   typing.className = "typing";
 
   typing.innerHTML = `
@@ -87,6 +145,7 @@ function showTyping() {
 
   message.appendChild(label);
   message.appendChild(typing);
+
   chat.appendChild(message);
 
   message.scrollIntoView({
@@ -96,7 +155,10 @@ function showTyping() {
 }
 
 function hideTyping() {
-  const typing = document.getElementById("nexaTyping");
+  const typing =
+    document.getElementById(
+      "nexaTyping"
+    );
 
   if (typing) {
     typing.remove();
@@ -104,21 +166,30 @@ function hideTyping() {
 }
 
 function addAnimatedMessage(text) {
-  const message = document.createElement("div");
-  message.className = "message nexa";
+  const message =
+    document.createElement("div");
 
-  const label = document.createElement("span");
+  message.className =
+    "message nexa";
+
+  const label =
+    document.createElement("span");
+
   label.className = "label";
   label.textContent = "NEXA";
 
-  const paragraph = document.createElement("p");
+  const paragraph =
+    document.createElement("p");
+
   paragraph.textContent = "";
 
   message.appendChild(label);
   message.appendChild(paragraph);
+
   chat.appendChild(message);
 
   let index = 0;
+
   const speed = 18;
 
   function typeNextCharacter() {
@@ -126,7 +197,9 @@ function addAnimatedMessage(text) {
       return;
     }
 
-    paragraph.textContent += text[index];
+    paragraph.textContent +=
+      text[index];
+
     index++;
 
     message.scrollIntoView({
@@ -134,7 +207,10 @@ function addAnimatedMessage(text) {
       block: "end"
     });
 
-    setTimeout(typeNextCharacter, speed);
+    setTimeout(
+      typeNextCharacter,
+      speed
+    );
   }
 
   typeNextCharacter();
@@ -150,22 +226,35 @@ function restoreConversation() {
   history.forEach(item => {
     addMessage(
       item.content,
-      item.role === "user" ? "user" : "nexa"
+      item.role === "user"
+        ? "user"
+        : "nexa"
     );
   });
 }
 
 function clearConversation() {
+  /*
+    IMPORTANTE:
+
+    Aqui apagamos somente a conversa local.
+
+    O USER_ID continua salvo.
+    As memórias reais do D1 continuam intactas.
+  */
+
   history.length = 0;
 
-  localStorage.removeItem(MEMORY_KEY);
+  localStorage.removeItem(
+    MEMORY_KEY
+  );
 
   hideTyping();
 
   chat.innerHTML = `
     <div class="message nexa">
       <span class="label">NEXA</span>
-      <p>Conversa limpa. Minha memória dessa conversa foi apagada. Manda a boa.</p>
+      <p>Conversa limpa. Minha memória dessa conversa foi apagada. O que eu já aprendi sobre você continua guardado.</p>
     </div>
   `;
 
@@ -174,21 +263,38 @@ function clearConversation() {
 }
 
 async function askNexa(text) {
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      message: text,
-      history: history.slice(-12)
-    })
-  });
+  const response =
+    await fetch("/api/chat", {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json"
+      },
+
+      body: JSON.stringify({
+        message: text,
+
+        /*
+          Histórico da conversa atual
+        */
+        history:
+          history.slice(-12),
+
+        /*
+          Identificador permanente
+          deste navegador.
+        */
+        userId
+      })
+    });
 
   let data;
 
   try {
-    data = await response.json();
+    data =
+      await response.json();
+
   } catch {
     throw new Error(
       `O servidor retornou uma resposta inválida (HTTP ${response.status}).`
@@ -211,112 +317,161 @@ async function askNexa(text) {
   return data.reply;
 }
 
-composer.addEventListener("submit", async function (event) {
-  event.preventDefault();
+composer.addEventListener(
+  "submit",
+  async function (event) {
 
-  const text = input.value.trim();
+    event.preventDefault();
 
-  if (!text || sendButton.disabled) {
-    return;
-  }
+    const text =
+      input.value.trim();
 
-  addMessage(text, "user");
-
-  input.value = "";
-
-  sendButton.disabled = true;
-  micButton.disabled = true;
-  newChatButton.disabled = true;
-
-  showTyping();
-
-  try {
-    const reply = await askNexa(text);
-
-    hideTyping();
-
-    history.push({
-      role: "user",
-      content: text
-    });
-
-    history.push({
-      role: "model",
-      content: reply
-    });
-
-    saveMemory();
-
-    addAnimatedMessage(reply);
-
-  } catch (error) {
-    console.error("NEXA error:", error);
-
-    hideTyping();
+    if (
+      !text ||
+      sendButton.disabled
+    ) {
+      return;
+    }
 
     addMessage(
-      "Erro ao conectar com a NEXA: " +
-      (error?.message || "erro desconhecido"),
-      "nexa"
+      text,
+      "user"
     );
 
-  } finally {
-    sendButton.disabled = false;
-    micButton.disabled = false;
-    newChatButton.disabled = false;
-    input.focus();
+    input.value = "";
+
+    sendButton.disabled = true;
+    micButton.disabled = true;
+    newChatButton.disabled = true;
+
+    showTyping();
+
+    try {
+
+      const reply =
+        await askNexa(text);
+
+      hideTyping();
+
+      history.push({
+        role: "user",
+        content: text
+      });
+
+      history.push({
+        role: "model",
+        content: reply
+      });
+
+      saveMemory();
+
+      addAnimatedMessage(
+        reply
+      );
+
+    } catch (error) {
+
+      console.error(
+        "NEXA error:",
+        error
+      );
+
+      hideTyping();
+
+      addMessage(
+        "Erro ao conectar com a NEXA: " +
+        (
+          error?.message ||
+          "erro desconhecido"
+        ),
+        "nexa"
+      );
+
+    } finally {
+
+      sendButton.disabled = false;
+      micButton.disabled = false;
+      newChatButton.disabled = false;
+
+      input.focus();
+    }
   }
-});
+);
 
 newChatButton.addEventListener(
   "click",
   clearConversation
 );
 
-micButton.addEventListener("click", function () {
-  const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
+micButton.addEventListener(
+  "click",
+  function () {
 
-  if (!SpeechRecognition) {
-    addMessage(
-      "Seu navegador não disponibilizou reconhecimento de voz nesta versão.",
-      "nexa"
-    );
-    return;
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+
+      addMessage(
+        "Seu navegador não disponibilizou reconhecimento de voz nesta versão.",
+        "nexa"
+      );
+
+      return;
+    }
+
+    const recognition =
+      new SpeechRecognition();
+
+    recognition.lang =
+      "pt-BR";
+
+    recognition.interimResults =
+      false;
+
+    recognition.onstart =
+      function () {
+
+        micButton.textContent =
+          "●";
+
+        micButton.disabled =
+          true;
+      };
+
+    recognition.onresult =
+      function (event) {
+
+        input.value =
+          event.results[0][0]
+            .transcript;
+
+        input.focus();
+      };
+
+    recognition.onerror =
+      function () {
+
+        addMessage(
+          "Não consegui entender o áudio. Tente falar novamente.",
+          "nexa"
+        );
+      };
+
+    recognition.onend =
+      function () {
+
+        micButton.textContent =
+          "◉";
+
+        micButton.disabled =
+          false;
+      };
+
+    recognition.start();
   }
-
-  const recognition = new SpeechRecognition();
-
-  recognition.lang = "pt-BR";
-  recognition.interimResults = false;
-
-  recognition.onstart = function () {
-    micButton.textContent = "●";
-    micButton.disabled = true;
-  };
-
-  recognition.onresult = function (event) {
-    input.value =
-      event.results[0][0].transcript;
-
-    input.focus();
-  };
-
-  recognition.onerror = function () {
-    addMessage(
-      "Não consegui entender o áudio. Tente falar novamente.",
-      "nexa"
-    );
-  };
-
-  recognition.onend = function () {
-    micButton.textContent = "◉";
-    micButton.disabled = false;
-  };
-
-  recognition.start();
-});
+);
 
 loadMemory();
 restoreConversation();
