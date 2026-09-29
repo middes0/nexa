@@ -28,6 +28,12 @@ Priorize respostas rápidas, naturais e objetivas.
 Não prolongue respostas simples.
 `;
 
+/*
+============================================================
+JSON
+============================================================
+*/
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -131,8 +137,7 @@ function cleanMemory(text) {
 
   if (!memory) return null;
 
-  const lower =
-    memory.toLowerCase();
+  const lower = memory.toLowerCase();
 
   const invalid = [
     "nenhuma",
@@ -150,8 +155,7 @@ function cleanMemory(text) {
 
   if (
     invalid.some(
-      value =>
-        lower.includes(value)
+      value => lower.includes(value)
     )
   ) {
     return null;
@@ -176,20 +180,14 @@ EXTRAÇÃO DE MEMÓRIA
 async function extractMemory(env, message) {
   if (!message) return null;
 
-  /*
-    Nome é detectado instantaneamente,
-    sem chamada adicional à IA.
-  */
-
   const nameMatch = message.match(
     /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
   );
 
   if (nameMatch) {
-    const name =
-      nameMatch[1]
-        .trim()
-        .replace(/\s+/g, " ");
+    const name = nameMatch[1]
+      .trim()
+      .replace(/\s+/g, " ");
 
     if (
       name.length >= 2 &&
@@ -199,14 +197,7 @@ async function extractMemory(env, message) {
     }
   }
 
-  /*
-    Só tenta descobrir outras memórias
-    quando a mensagem parece realmente
-    conter uma preferência/informação pessoal.
-  */
-
-  const lower =
-    message.toLowerCase();
+  const lower = message.toLowerCase();
 
   const shouldAnalyze = [
     "eu gosto",
@@ -229,8 +220,7 @@ async function extractMemory(env, message) {
     "quero que você lembre",
     "quero que voce lembre"
   ].some(
-    phrase =>
-      lower.includes(phrase)
+    phrase => lower.includes(phrase)
   );
 
   if (!shouldAnalyze) {
@@ -248,9 +238,7 @@ async function extractMemory(env, message) {
         method: "POST",
 
         headers: {
-          "Content-Type":
-            "application/json",
-
+          "Content-Type": "application/json",
           "x-goog-api-key":
             env.GEMINI_API_KEY
         },
@@ -319,15 +307,17 @@ ${message}
 
 /*
 ============================================================
-GEMINI PRINCIPAL
+STREAMING GEMINI
 ============================================================
 */
 
-async function askGemini(
+async function streamGemini(
   env,
   message,
   history,
-  memories
+  memories,
+  context,
+  userId
 ) {
   const memoryText =
     memories.length
@@ -344,7 +334,7 @@ ${memories
       : "";
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${PRIMARY_MODEL}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${PRIMARY_MODEL}:streamGenerateContent?alt=sse`,
     {
       method: "POST",
 
@@ -383,17 +373,8 @@ ${memories
 
         generationConfig: {
           temperature: 0.7,
-
-          /*
-            Respostas mais curtas =
-            menor tempo de geração.
-          */
           maxOutputTokens: 400,
 
-          /*
-            Gemini 3.8 permite reduzir o
-            raciocínio para casos de baixa latência.
-          */
           thinkingConfig: {
             thinkingLevel: "low"
           }
@@ -402,35 +383,250 @@ ${memories
     }
   );
 
-  const data =
-    await response
-      .json()
-      .catch(() => ({}));
-
   if (!response.ok) {
+    const errorData =
+      await response
+        .json()
+        .catch(() => ({}));
+
     throw new Error(
-      data?.error?.message ||
+      errorData?.error?.message ||
       `Gemini HTTP ${response.status}`
     );
   }
 
-  const reply =
-    data?.candidates?.[0]
-      ?.content
-      ?.parts
-      ?.map(
-        part => part.text || ""
-      )
-      .join("")
-      .trim();
-
-  if (!reply) {
+  if (!response.body) {
     throw new Error(
-      "Gemini não retornou texto."
+      "Gemini não retornou um stream."
     );
   }
 
-  return reply;
+  /*
+    Stream que será enviado para o navegador.
+  */
+
+  const encoder =
+    new TextEncoder();
+
+  const decoder =
+    new TextDecoder();
+
+  let fullReply = "";
+
+  const outputStream =
+    new TransformStream();
+
+  const writer =
+    outputStream.writable.getWriter();
+
+  const reader =
+    response.body.getReader();
+
+  let buffer = "";
+
+  /*
+    Envia um pedaço de texto para o frontend.
+  */
+
+  async function sendText(text) {
+    if (!text) return;
+
+    fullReply += text;
+
+    await writer.write(
+      encoder.encode(
+        `data: ${JSON.stringify({
+          type: "text",
+          text
+        })}\n\n`
+      )
+    );
+  }
+
+  /*
+    Processa um evento SSE do Gemini.
+  */
+
+  async function processEvent(event) {
+    const lines =
+      event.split("\n");
+
+    let dataText = "";
+
+    for (const line of lines) {
+      if (line.startsWith("data:")) {
+        dataText +=
+          line.slice(5).trim();
+      }
+    }
+
+    if (!dataText) return;
+
+    if (dataText === "[DONE]") {
+      return;
+    }
+
+    let data;
+
+    try {
+      data = JSON.parse(dataText);
+    } catch {
+      return;
+    }
+
+    const parts =
+      data?.candidates?.[0]
+        ?.content
+        ?.parts || [];
+
+    for (const part of parts) {
+      /*
+        Ignora partes de pensamento.
+        Só enviamos texto da resposta.
+      */
+
+      if (
+        part?.thought === true
+      ) {
+        continue;
+      }
+
+      if (
+        typeof part?.text === "string" &&
+        part.text
+      ) {
+        await sendText(
+          part.text
+        );
+      }
+    }
+  }
+
+  /*
+    Processamento assíncrono do stream.
+  */
+
+  (async () => {
+    try {
+      while (true) {
+        const {
+          value,
+          done
+        } = await reader.read();
+
+        if (done) break;
+
+        buffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true
+            }
+          );
+
+        /*
+          SSE separa eventos com
+          uma linha em branco.
+        */
+
+        const events =
+          buffer.split("\n\n");
+
+        buffer =
+          events.pop() || "";
+
+        for (const event of events) {
+          await processEvent(
+            event
+          );
+        }
+      }
+
+      /*
+        Processa eventual evento restante.
+      */
+
+      if (buffer.trim()) {
+        await processEvent(
+          buffer
+        );
+      }
+
+      /*
+        Salva memória depois que
+        a resposta já começou/terminou.
+      */
+
+      if (
+        context.waitUntil &&
+        context.env.DB
+      ) {
+        context.waitUntil(
+          (async () => {
+            const memory =
+              await extractMemory(
+                context.env,
+                message
+              );
+
+            if (memory) {
+              await saveMemory(
+                context.env.DB,
+                userId,
+                memory
+              );
+            }
+          })()
+        );
+      }
+
+      /*
+        Avisa o frontend que terminou.
+      */
+
+      await writer.write(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            type: "done",
+            provider: "gemini",
+            model: PRIMARY_MODEL
+          })}\n\n`
+        )
+      );
+
+      await writer.close();
+
+      console.log(
+        `NEXA streaming terminou: ${fullReply.length} caracteres`
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Erro no streaming Gemini:",
+        error?.message
+      );
+
+      try {
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "error",
+              error:
+                "Erro durante a geração da resposta."
+            })}\n\n`
+          )
+        );
+
+        await writer.close();
+
+      } catch {
+        // Stream já pode ter sido fechado.
+      }
+    }
+  })();
+
+  return outputStream.readable;
 }
 
 /*
@@ -478,9 +674,6 @@ ${memories
         },
 
         body: JSON.stringify({
-          /*
-            Mantido apenas como fallback.
-          */
           model: "gpt-5.6-luna",
 
           input: [
@@ -549,6 +742,7 @@ export async function onRequestPost(context) {
     Date.now();
 
   try {
+
     if (!context.env.GEMINI_API_KEY) {
       return json(
         {
@@ -584,8 +778,8 @@ export async function onRequestPost(context) {
         : "default-user";
 
     /*
-      Só enviamos as últimas 6 mensagens.
-      Isso mantém o prompt pequeno.
+      Mantém somente as últimas
+      6 mensagens.
     */
 
     const history =
@@ -614,7 +808,8 @@ export async function onRequestPost(context) {
         : [];
 
     /*
-      Memórias são carregadas apenas uma vez.
+      Busca as memórias antes
+      de iniciar o streaming.
     */
 
     const memories =
@@ -625,70 +820,58 @@ export async function onRequestPost(context) {
 
     /*
     ==========================================================
-    RESPOSTA PRINCIPAL
+    GEMINI STREAMING
     ==========================================================
     */
 
     try {
-      const reply =
-        await askGemini(
+
+      const stream =
+        await streamGemini(
           context.env,
           message,
           history,
-          memories
+          memories,
+          context,
+          userId
         );
-
-      /*
-        Memória fica totalmente fora do caminho
-        crítico da resposta.
-      */
-
-      if (
-        context.waitUntil &&
-        context.env.DB
-      ) {
-        context.waitUntil(
-          (async () => {
-
-            const memory =
-              await extractMemory(
-                context.env,
-                message
-              );
-
-            if (memory) {
-              await saveMemory(
-                context.env.DB,
-                userId,
-                memory
-              );
-            }
-
-          })()
-        );
-      }
 
       console.log(
-        `NEXA respondeu em ${Date.now() - start}ms`
+        `NEXA iniciou streaming em ${Date.now() - start}ms`
       );
 
-      return json({
-        reply,
-        provider: "gemini",
-        model: PRIMARY_MODEL,
-        responseTime:
-          Date.now() - start
-      });
+      return new Response(
+        stream,
+        {
+          status: 200,
+
+          headers: {
+            "Content-Type":
+              "text/event-stream; charset=utf-8",
+
+            "Cache-Control":
+              "no-cache, no-store, must-revalidate",
+
+            "Connection":
+              "keep-alive",
+
+            "X-Accel-Buffering":
+              "no"
+          }
+        }
+      );
 
     } catch (geminiError) {
 
       console.error(
-        "Gemini falhou:",
+        "Gemini streaming falhou:",
         geminiError?.message
       );
 
       /*
-        Só usa OpenAI se o Gemini realmente falhar.
+        Se o Gemini falhar antes
+        de iniciar o stream,
+        tenta OpenAI.
       */
 
       try {
@@ -701,12 +884,52 @@ export async function onRequestPost(context) {
             memories
           );
 
-        return json({
-          reply,
-          provider: "openai",
-          responseTime:
-            Date.now() - start
-        });
+        const encoder =
+          new TextEncoder();
+
+        const fallbackStream =
+          new ReadableStream({
+            start(controller) {
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "text",
+                    text: reply
+                  })}\n\n`
+                )
+              );
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "done",
+                    provider: "openai"
+                  })}\n\n`
+                )
+              );
+
+              controller.close();
+            }
+          });
+
+        return new Response(
+          fallbackStream,
+          {
+            status: 200,
+
+            headers: {
+              "Content-Type":
+                "text/event-stream; charset=utf-8",
+
+              "Cache-Control":
+                "no-cache, no-store, must-revalidate",
+
+              "Connection":
+                "keep-alive"
+            }
+          }
+        );
 
       } catch (openaiError) {
 
