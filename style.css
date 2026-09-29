@@ -4,7 +4,7 @@
 
 :root {
   --bg: #07050b;
-  --bg-deep: #040308;
+  --bg-deep: #030207;
 
   --panel: #0d0913;
   --panel-light: #120d1b;
@@ -16,15 +16,21 @@
   --muted: #91889f;
 
   --accent: #8b5cf6;
-  --accent-light: #a78bfa;
+  --accent-light: #b99cff;
   --accent-dark: #4c1d95;
 
-  --success: #a78bfa;
+  --purple-bright: #c4a7ff;
 }
+
 
 /* =========================
    BASE
 ========================= */
+
+html {
+  min-height: 100%;
+  background: var(--bg-deep);
+}
 
 body {
   margin: 0;
@@ -32,15 +38,19 @@ body {
 
   background:
     radial-gradient(
-      circle at 50% 0%,
-      rgba(76, 29, 149, 0.20) 0%,
-      rgba(30, 15, 50, 0.10) 24%,
-      transparent 50%
+      circle at 50% 12%,
+      rgba(91, 33, 182, 0.18),
+      transparent 34%
     ),
     radial-gradient(
-      circle at 85% 75%,
-      rgba(91, 33, 182, 0.08),
-      transparent 35%
+      circle at 15% 80%,
+      rgba(76, 29, 149, 0.09),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 90% 65%,
+      rgba(124, 58, 237, 0.07),
+      transparent 30%
     ),
     var(--bg-deep);
 
@@ -58,10 +68,95 @@ body {
 
 
 /* =========================
+   AMBIENT BACKGROUND
+========================= */
+
+.ambient {
+  position: fixed;
+
+  width: 300px;
+  height: 300px;
+
+  border-radius: 50%;
+
+  pointer-events: none;
+
+  filter: blur(90px);
+
+  opacity: 0.16;
+
+  z-index: 0;
+}
+
+.ambient-one {
+  top: -130px;
+  left: 20%;
+
+  background: #6d28d9;
+
+  animation: ambientFloatOne 12s infinite ease-in-out;
+}
+
+.ambient-two {
+  right: -160px;
+  bottom: 10%;
+
+  background: #7c3aed;
+
+  animation: ambientFloatTwo 15s infinite ease-in-out;
+}
+
+.ambient-three {
+  left: -180px;
+  bottom: -100px;
+
+  background: #4c1d95;
+
+  animation: ambientFloatThree 18s infinite ease-in-out;
+}
+
+@keyframes ambientFloatOne {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(50px, 30px);
+  }
+}
+
+@keyframes ambientFloatTwo {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(-40px, -50px);
+  }
+}
+
+@keyframes ambientFloatThree {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(60px, -30px);
+  }
+}
+
+
+/* =========================
    APP
 ========================= */
 
 .app {
+  position: relative;
+  z-index: 1;
+
   width: min(760px, 100%);
   min-height: 100vh;
 
@@ -107,13 +202,13 @@ body {
 .brand h1 {
   margin: 0;
 
-  color: #ffffff;
+  color: #fff;
 
   font-size: 22px;
   letter-spacing: 4px;
 
   text-shadow:
-    0 0 18px rgba(139, 92, 246, 0.45);
+    0 0 18px rgba(139, 92, 246, 0.5);
 }
 
 .brand span {
@@ -143,7 +238,7 @@ body {
   background:
     radial-gradient(
       circle,
-      #ffffff 0 7%,
+      #fff 0 7%,
       var(--accent-light) 18%,
       var(--accent) 34%,
       rgba(139, 92, 246, 0.15) 55%,
@@ -163,10 +258,10 @@ body {
 
   border-radius: 50%;
 
-  background: #ffffff;
+  background: #fff;
 
   box-shadow:
-    0 0 12px #ffffff,
+    0 0 12px #fff,
     0 0 22px var(--accent-light);
 }
 
@@ -178,14 +273,14 @@ body {
   }
 
   50% {
-    transform: scale(1.06);
-    filter: brightness(1.2);
+    transform: scale(1.08);
+    filter: brightness(1.25);
   }
 }
 
 
 /* =========================
-   TOPBAR ACTIONS
+   TOP ACTIONS
 ========================= */
 
 .topbar-actions {
@@ -201,7 +296,6 @@ body {
 
 .status {
   color: #bda9df;
-
   font-size: 12px;
 }
 
@@ -215,11 +309,26 @@ body {
 
   border-radius: 50%;
 
-  background: #9f7aea;
+  background: #a78bfa;
 
   box-shadow:
     0 0 8px #8b5cf6,
     0 0 15px rgba(139, 92, 246, 0.55);
+
+  animation: statusPulse 2s infinite ease-in-out;
+}
+
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 
@@ -232,8 +341,7 @@ body {
 
   border-radius: 10px;
 
-  background:
-    rgba(18, 13, 27, 0.8);
+  background: rgba(18, 13, 27, 0.8);
 
   color: var(--muted);
 
@@ -251,12 +359,11 @@ body {
 }
 
 .new-chat-button:hover {
-  color: #ffffff;
+  color: #fff;
 
   border-color: var(--accent);
 
-  background:
-    rgba(76, 29, 149, 0.18);
+  background: rgba(76, 29, 149, 0.18);
 
   box-shadow:
     0 0 16px rgba(139, 92, 246, 0.12);
@@ -274,20 +381,22 @@ body {
 .hero {
   text-align: center;
 
-  padding: 52px 10px 34px;
+  padding: 54px 10px 34px;
+
+  position: relative;
 }
 
 .hero h2 {
-  margin: 20px 0 8px;
+  margin: 24px 0 8px;
 
-  color: #ffffff;
+  color: #fff;
 
   font-size: 25px;
 
   letter-spacing: -0.3px;
 
   text-shadow:
-    0 0 25px rgba(139, 92, 246, 0.18);
+    0 0 25px rgba(139, 92, 246, 0.2);
 }
 
 .hero p {
@@ -304,8 +413,8 @@ body {
 ========================= */
 
 .core {
-  width: 115px;
-  height: 115px;
+  width: 145px;
+  height: 145px;
 
   margin: auto;
 
@@ -314,20 +423,67 @@ body {
   display: grid;
   place-items: center;
 
-  border: 1px solid rgba(139, 92, 246, 0.42);
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(139, 92, 246, 0.13),
+      rgba(76, 29, 149, 0.05) 42%,
+      transparent 70%
+    );
+
+  animation: coreBreathing 4s infinite ease-in-out;
+}
+
+@keyframes coreBreathing {
+  0%,
+  100% {
+    transform: scale(0.97);
+  }
+
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+
+/* =========================
+   CORE AURA
+========================= */
+
+.core-aura {
+  position: absolute;
+
+  width: 145px;
+  height: 145px;
 
   border-radius: 50%;
 
   background:
     radial-gradient(
       circle,
-      rgba(76, 29, 149, 0.16),
-      transparent 65%
+      rgba(139, 92, 246, 0.22),
+      rgba(76, 29, 149, 0.09) 42%,
+      transparent 72%
     );
 
-  box-shadow:
-    0 0 45px rgba(139, 92, 246, 0.13),
-    inset 0 0 35px rgba(139, 92, 246, 0.10);
+  filter: blur(13px);
+
+  animation: auraPulse 4s infinite ease-in-out;
+}
+
+@keyframes auraPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.88);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
 }
 
 
@@ -338,34 +494,35 @@ body {
 .core-glow {
   position: absolute;
 
-  width: 85px;
-  height: 85px;
+  width: 92px;
+  height: 92px;
 
   border-radius: 50%;
 
   background:
     radial-gradient(
       circle,
-      rgba(139, 92, 246, 0.24),
-      transparent 70%
+      rgba(255, 255, 255, 0.22),
+      rgba(167, 139, 250, 0.38) 14%,
+      rgba(139, 92, 246, 0.23) 34%,
+      transparent 72%
     );
 
-  filter: blur(8px);
+  filter: blur(9px);
 
-  animation:
-    coreGlow 3s infinite ease-in-out;
+  animation: coreGlow 2.8s infinite ease-in-out;
 }
 
 @keyframes coreGlow {
   0%,
   100% {
     opacity: 0.55;
-    transform: scale(0.9);
+    transform: scale(0.82);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1.08);
+    transform: scale(1.15);
   }
 }
 
@@ -377,54 +534,132 @@ body {
 .core-ring {
   position: absolute;
 
-  width: 78px;
-  height: 78px;
+  border-radius: 50%;
 
-  border: 1px solid var(--accent);
+  pointer-events: none;
+}
+
+.ring-one {
+  width: 76px;
+  height: 76px;
+
+  border:
+    1px solid rgba(194, 165, 255, 0.85);
+
+  box-shadow:
+    0 0 15px rgba(139, 92, 246, 0.32);
+
+  animation:
+    ringOne 5s infinite linear;
+}
+
+.ring-two {
+  width: 104px;
+  height: 104px;
+
+  border:
+    1px solid rgba(139, 92, 246, 0.48);
+
+  border-left-color: transparent;
+  border-right-color: rgba(196, 167, 255, 0.7);
+
+  animation:
+    ringTwo 7s infinite linear;
+}
+
+.ring-three {
+  width: 132px;
+  height: 132px;
+
+  border:
+    1px solid rgba(139, 92, 246, 0.2);
+
+  border-top-color: rgba(167, 139, 250, 0.7);
+  border-bottom-color: transparent;
+
+  box-shadow:
+    0 0 20px rgba(76, 29, 149, 0.2);
+
+  animation:
+    ringThree 11s infinite linear;
+}
+
+@keyframes ringOne {
+  from {
+    transform: rotate(0deg) scale(0.94);
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.08);
+  }
+
+  to {
+    transform: rotate(360deg) scale(0.94);
+  }
+}
+
+@keyframes ringTwo {
+  from {
+    transform: rotate(360deg) scale(0.96);
+  }
+
+  to {
+    transform: rotate(0deg) scale(0.96);
+  }
+}
+
+@keyframes ringThree {
+  from {
+    transform: rotate(0deg) scale(0.98);
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.04);
+  }
+
+  to {
+    transform: rotate(360deg) scale(0.98);
+  }
+}
+
+
+/* =========================
+   ENERGY
+========================= */
+
+.core-energy {
+  position: absolute;
+
+  width: 38px;
+  height: 38px;
 
   border-radius: 50%;
 
-  animation:
-    pulse 2.2s infinite ease-in-out;
+  background:
+    radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.9),
+      rgba(196, 167, 255, 0.6) 20%,
+      rgba(139, 92, 246, 0.28) 45%,
+      transparent 72%
+    );
 
-  box-shadow:
-    0 0 18px rgba(139, 92, 246, 0.16);
-}
-
-.core-ring-two {
-  width: 92px;
-  height: 92px;
-
-  border-color:
-    rgba(139, 92, 246, 0.28);
+  filter: blur(3px);
 
   animation:
-    pulseTwo 3.2s infinite ease-in-out;
+    energyPulse 1.9s infinite ease-in-out;
 }
 
-@keyframes pulse {
+@keyframes energyPulse {
   0%,
   100% {
-    transform: scale(0.96);
-    opacity: 0.9;
+    transform: scale(0.8);
+    opacity: 0.6;
   }
 
   50% {
-    transform: scale(1.12);
-    opacity: 0.45;
-  }
-}
-
-@keyframes pulseTwo {
-  0%,
-  100% {
-    transform: scale(0.94);
-    opacity: 0.35;
-  }
-
-  50% {
-    transform: scale(1.08);
-    opacity: 0.7;
+    transform: scale(1.25);
+    opacity: 1;
   }
 }
 
@@ -436,30 +671,129 @@ body {
 .core-dot {
   position: absolute;
 
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 
   border-radius: 50%;
 
-  background: #ffffff;
+  background: #fff;
 
   box-shadow:
-    0 0 12px #ffffff,
-    0 0 25px 7px var(--accent),
-    0 0 45px 12px rgba(139, 92, 246, 0.45);
+    0 0 8px #fff,
+    0 0 18px #fff,
+    0 0 32px 8px var(--accent),
+    0 0 55px 13px rgba(139, 92, 246, 0.5);
 
   animation:
-    dotPulse 2.2s infinite ease-in-out;
+    dotPulse 1.8s infinite ease-in-out;
 }
 
 @keyframes dotPulse {
   0%,
   100% {
-    transform: scale(0.9);
+    transform: scale(0.86);
+    filter: brightness(0.95);
   }
 
   50% {
-    transform: scale(1.12);
+    transform: scale(1.18);
+    filter: brightness(1.25);
+  }
+}
+
+
+/* =========================
+   PARTICLES
+========================= */
+
+.particle {
+  position: absolute;
+
+  width: 4px;
+  height: 4px;
+
+  border-radius: 50%;
+
+  background: #c4a7ff;
+
+  box-shadow:
+    0 0 7px #a78bfa,
+    0 0 15px rgba(139, 92, 246, 0.8);
+
+  animation:
+    particlePulse 2.4s infinite ease-in-out;
+}
+
+.particle-one {
+  top: 18px;
+  left: 72px;
+}
+
+.particle-two {
+  top: 42px;
+  right: 20px;
+
+  animation-delay: 0.4s;
+}
+
+.particle-three {
+  right: 8px;
+  bottom: 48px;
+
+  animation-delay: 0.8s;
+}
+
+.particle-four {
+  bottom: 15px;
+  right: 61px;
+
+  animation-delay: 1.2s;
+}
+
+.particle-five {
+  bottom: 27px;
+  left: 30px;
+
+  animation-delay: 0.3s;
+}
+
+.particle-six {
+  left: 7px;
+  top: 56px;
+
+  animation-delay: 0.9s;
+}
+
+.particle-seven {
+  left: 37px;
+  top: 22px;
+
+  width: 3px;
+  height: 3px;
+
+  animation-delay: 1.5s;
+}
+
+.particle-eight {
+  right: 35px;
+  bottom: 26px;
+
+  width: 3px;
+  height: 3px;
+
+  animation-delay: 1.8s;
+}
+
+@keyframes particlePulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.6);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
   }
 }
 
@@ -504,6 +838,21 @@ body {
     0 8px 25px rgba(0, 0, 0, 0.18);
 
   backdrop-filter: blur(10px);
+
+  animation:
+    messageAppear 0.25s ease-out;
+}
+
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message.user {
@@ -628,7 +977,8 @@ body {
     rgba(139, 92, 246, 0.55);
 
   box-shadow:
-    0 0 25px rgba(76, 29, 149, 0.10),
+    0 0 25px rgba(76, 29, 149, 0.16),
+    0 10px 35px rgba(0, 0, 0, 0.28),
     inset 0 0 20px rgba(76, 29, 149, 0.05);
 }
 
@@ -659,7 +1009,7 @@ body {
 
 
 /* =========================
-   COMPOSER BUTTONS
+   BUTTONS
 ========================= */
 
 .composer button {
@@ -670,8 +1020,7 @@ body {
 
   border-radius: 12px;
 
-  background:
-    #171021;
+  background: #171021;
 
   color: var(--accent-light);
 
@@ -687,10 +1036,9 @@ body {
 }
 
 .composer button:hover {
-  background:
-    #241438;
+  background: #241438;
 
-  color: #ffffff;
+  color: #fff;
 
   box-shadow:
     0 0 18px rgba(139, 92, 246, 0.18);
@@ -708,7 +1056,7 @@ body {
       #6d28d9
     );
 
-  color: #ffffff;
+  color: #fff;
 
   box-shadow:
     0 0 18px rgba(139, 92, 246, 0.25);
@@ -728,7 +1076,6 @@ body {
 
 .composer button:disabled {
   opacity: 0.5;
-
   cursor: wait;
 }
 
@@ -780,8 +1127,18 @@ footer {
   }
 
   .core {
-    width: 105px;
-    height: 105px;
+    width: 125px;
+    height: 125px;
+  }
+
+  .core-aura {
+    width: 125px;
+    height: 125px;
+  }
+
+  .ring-three {
+    width: 115px;
+    height: 115px;
   }
 
   .message {
@@ -790,5 +1147,20 @@ footer {
 
   .new-chat-button {
     padding: 8px 10px;
+  }
+}
+
+
+/* =========================
+   REDUÇÃO DE MOVIMENTO
+========================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
