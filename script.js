@@ -28,7 +28,6 @@ function addMessage(text, type) {
 }
 
 function showTyping() {
-  // Evita criar dois indicadores ao mesmo tempo
   if (document.getElementById("nexaTyping")) {
     return;
   }
@@ -65,6 +64,44 @@ function hideTyping() {
   if (typing) {
     typing.remove();
   }
+}
+
+function addAnimatedMessage(text) {
+  const message = document.createElement("div");
+  message.className = "message nexa";
+
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "NEXA";
+
+  const paragraph = document.createElement("p");
+  paragraph.textContent = "";
+
+  message.appendChild(label);
+  message.appendChild(paragraph);
+  chat.appendChild(message);
+
+  let index = 0;
+
+  const speed = 18;
+
+  function typeNextCharacter() {
+    if (index >= text.length) {
+      return;
+    }
+
+    paragraph.textContent += text[index];
+    index++;
+
+    message.scrollIntoView({
+      behavior: "smooth",
+      block: "end"
+    });
+
+    setTimeout(typeNextCharacter, speed);
+  }
+
+  typeNextCharacter();
 }
 
 async function askNexa(text) {
@@ -114,23 +151,18 @@ composer.addEventListener("submit", async function (event) {
     return;
   }
 
-  // Mostra a mensagem do usuário
   addMessage(text, "user");
 
-  // Limpa o campo
   input.value = "";
 
-  // Bloqueia os controles enquanto a NEXA responde
   sendButton.disabled = true;
   micButton.disabled = true;
 
-  // Mostra "NEXA está digitando..."
   showTyping();
 
   try {
     const reply = await askNexa(text);
 
-    // Remove o indicador antes de mostrar a resposta
     hideTyping();
 
     history.push({
@@ -143,12 +175,11 @@ composer.addEventListener("submit", async function (event) {
       text: reply
     });
 
-    addMessage(reply, "nexa");
+    addAnimatedMessage(reply);
 
   } catch (error) {
     console.error("NEXA error:", error);
 
-    // Garante que o indicador desapareça mesmo se der erro
     hideTyping();
 
     addMessage(
