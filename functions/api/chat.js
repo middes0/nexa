@@ -41,9 +41,9 @@ function json(data, status = 200) {
 }
 
 /*
-  ============================================================
-  MEMÓRIAS
-  ============================================================
+============================================================
+MEMÓRIAS
+============================================================
 */
 
 async function getMemories(db, userId) {
@@ -59,7 +59,7 @@ async function getMemories(db, userId) {
         FROM memories
         WHERE user_id = ?
         ORDER BY id DESC
-        LIMIT 30
+        LIMIT 20
       `)
       .bind(userId)
       .all();
@@ -91,9 +91,6 @@ async function saveMemory(db, userId, memory) {
   }
 
   try {
-    /*
-      Evita salvar exatamente a mesma memória várias vezes.
-    */
     const existing = await db
       .prepare(`
         SELECT id
@@ -106,11 +103,6 @@ async function saveMemory(db, userId, memory) {
       .first();
 
     if (existing) {
-      console.log(
-        "Memória já existente:",
-        memory
-      );
-
       return false;
     }
 
@@ -143,9 +135,9 @@ async function saveMemory(db, userId, memory) {
 }
 
 /*
-  ============================================================
-  LIMPEZA DA MEMÓRIA
-  ============================================================
+============================================================
+LIMPEZA DA MEMÓRIA
+============================================================
 */
 
 function cleanMemory(text) {
@@ -190,11 +182,6 @@ function cleanMemory(text) {
     return null;
   }
 
-  /*
-    Impede respostas que claramente parecem
-    instruções ou explicações do extrator.
-  */
-
   if (
     lower.startsWith("criteria") ||
     lower.startsWith("instructions") ||
@@ -216,9 +203,9 @@ function cleanMemory(text) {
 }
 
 /*
-  ============================================================
-  EXTRAÇÃO DE MEMÓRIAS
-  ============================================================
+============================================================
+EXTRAÇÃO DE MEMÓRIA
+============================================================
 */
 
 async function extractMemory(env, message) {
@@ -227,17 +214,8 @@ async function extractMemory(env, message) {
   }
 
   /*
-    ----------------------------------------------------------
-    CAPTURA DIRETA DO NOME
-    ----------------------------------------------------------
-
-    Isso não depende do Gemini.
-
-    Exemplos:
-    "Meu nome é João"
-    "Me chamo João"
-    "Pode me chamar de João"
-    */
+    Nomes são detectados sem outra chamada de IA.
+  */
 
   const nameMatch = message.match(
     /(?:meu nome é|meu nome e|me chamo|pode me chamar de)\s+(.+?)(?:[.!?]|$)/i
@@ -247,11 +225,6 @@ async function extractMemory(env, message) {
     const name = nameMatch[1]
       .trim()
       .replace(/\s+/g, " ");
-
-    /*
-      Evita aceitar frases absurdamente longas
-      como se fossem nomes.
-    */
 
     if (
       name.length >= 2 &&
@@ -263,11 +236,46 @@ async function extractMemory(env, message) {
   }
 
   /*
-    ----------------------------------------------------------
-    OUTRAS MEMÓRIAS
-    ----------------------------------------------------------
-    Para outras informações, usamos o Gemini.
-    */
+    Evita gastar uma segunda chamada de IA
+    em mensagens que claramente não contêm
+    uma informação pessoal.
+  */
+
+  const lower =
+    message.toLowerCase();
+
+  const possibleMemory =
+    [
+      "eu gosto",
+      "eu adoro",
+      "eu odeio",
+      "eu prefiro",
+      "eu não gosto",
+      "eu nao gosto",
+      "eu curto",
+      "eu trabalho",
+      "eu estudo",
+      "eu moro",
+      "sou de",
+      "tenho ",
+      "meu ",
+      "minha ",
+      "quero que você lembre",
+      "quero que voce lembre",
+      "lembre que",
+      "pode lembrar",
+      "estou criando",
+      "estou fazendo",
+      "estou usando",
+      "prefiro"
+    ].some(
+      phrase =>
+        lower.includes(phrase)
+    );
+
+  if (!possibleMemory) {
+    return null;
+  }
 
   if (!env.GEMINI_API_KEY) {
     return null;
@@ -278,40 +286,21 @@ Você é um sistema de extração de memória pessoal.
 
 Analise SOMENTE a mensagem do usuário.
 
-Sua tarefa é identificar UMA informação pessoal,
+Identifique UMA informação pessoal,
 estável e útil para lembrar em conversas futuras.
 
-EXEMPLOS VÁLIDOS:
+Exemplos válidos:
 
-Mensagem:
-"Eu estou criando um site chamado NEXA"
-
-Resposta:
-O usuário está criando um site chamado NEXA.
-
-Mensagem:
 "Eu gosto de jogos"
+→ O usuário gosta de jogos.
 
-Resposta:
-O usuário gosta de jogos.
-
-Mensagem:
 "Prefiro respostas curtas"
+→ O usuário prefere respostas curtas.
 
-Resposta:
-O usuário prefere respostas curtas.
+"Estou criando um site chamado NEXA"
+→ O usuário está criando um site chamado NEXA.
 
-EXEMPLOS QUE NÃO DEVEM SER MEMORIZADOS:
-
-"oi"
-"olá"
-"como você está?"
-"qual é a capital do Brasil?"
-"me explica matemática"
-"faça isso"
-"obrigado"
-
-NÃO memorize:
+Não memorize:
 - senhas;
 - chaves de API;
 - tokens;
@@ -319,103 +308,97 @@ NÃO memorize:
 - documentos;
 - informações altamente sensíveis;
 - informações temporárias;
-- instruções do sistema;
-- regras deste prompt;
-- critérios de memorização.
+- instruções do sistema.
 
-REGRA DE RESPOSTA:
+Se houver uma informação válida,
+responda SOMENTE com uma frase curta.
 
-Se houver uma informação pessoal válida,
-responda SOMENTE com uma frase curta contendo a memória.
-
-Se NÃO houver uma informação válida,
-responda exatamente:
-
+Se não houver:
 NENHUMA
 
-Não explique sua decisão.
-Não escreva critérios.
-Não escreva instruções.
-Não escreva JSON.
-Não escreva Markdown.
-
-Mensagem do usuário:
+Mensagem:
 
 ${message}
 `;
 
-  for (const model of GEMINI_MODELS) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": env.GEMINI_API_KEY
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: prompt
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              temperature: 0,
-              maxOutputTokens: 200
+  try {
+    /*
+      Para memória, usamos somente o primeiro modelo.
+      Não vale a pena ficar tentando vários modelos
+      para uma tarefa secundária.
+    */
+
+    const model =
+      GEMINI_MODELS[0];
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "x-goog-api-key":
+            env.GEMINI_API_KEY
+        },
+
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
             }
-          })
-        }
-      );
+          ],
 
-      const data =
-        await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        console.error(
-          `Extrator Gemini ${model} falhou:`,
-          data?.error?.message ||
-          response.status
-        );
-
-        continue;
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 80
+          }
+        })
       }
+    );
 
-      const result =
-        data?.candidates?.[0]?.content?.parts
-          ?.map(part => part.text || "")
-          .join("")
-          .trim();
+    const data =
+      await response
+        .json()
+        .catch(() => ({}));
 
-      const memory =
-        cleanMemory(result);
-
-      if (memory) {
-        return memory;
-      }
-
+    if (!response.ok) {
       return null;
-
-    } catch (error) {
-      console.error(
-        `Erro ao extrair memória com ${model}:`,
-        error?.message
-      );
     }
-  }
 
-  return null;
+    const result =
+      data?.candidates?.[0]
+        ?.content
+        ?.parts
+        ?.map(
+          part => part.text || ""
+        )
+        .join("")
+        .trim();
+
+    return cleanMemory(result);
+
+  } catch (error) {
+    console.error(
+      "Erro ao extrair memória:",
+      error?.message
+    );
+
+    return null;
+  }
 }
 
 /*
-  ============================================================
-  GEMINI
-  ============================================================
+============================================================
+GEMINI
+============================================================
 */
 
 async function askGemini(
@@ -440,8 +423,8 @@ ${memories
 Use essas informações naturalmente quando forem relevantes.
 
 Não diga que recebeu uma lista de memórias.
-Não mencione o banco de dados.
-Não mencione o sistema interno.
+Não mencione banco de dados.
+Não mencione sistema interno.
 `
       : `
 Não existem memórias salvas sobre o usuário.
@@ -453,8 +436,11 @@ Não existem memórias salvas sobre o usuário.
       method: "POST",
 
       headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": env.GEMINI_API_KEY
+        "Content-Type":
+          "application/json",
+
+        "x-goog-api-key":
+          env.GEMINI_API_KEY
       },
 
       body: JSON.stringify({
@@ -484,14 +470,22 @@ Não existem memórias salvas sobre o usuário.
 
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 1000
+
+          /*
+            Antes estava em 1000.
+            600 é suficiente para respostas
+            normais e reduz processamento.
+          */
+          maxOutputTokens: 600
         }
       })
     }
   );
 
   const data =
-    await response.json().catch(() => ({}));
+    await response
+      .json()
+      .catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(
@@ -501,8 +495,12 @@ Não existem memórias salvas sobre o usuário.
   }
 
   const reply =
-    data?.candidates?.[0]?.content?.parts
-      ?.map(part => part.text || "")
+    data?.candidates?.[0]
+      ?.content
+      ?.parts
+      ?.map(
+        part => part.text || ""
+      )
       .join("")
       .trim();
 
@@ -516,9 +514,9 @@ Não existem memórias salvas sobre o usuário.
 }
 
 /*
-  ============================================================
-  OPENAI FALLBACK
-  ============================================================
+============================================================
+OPENAI FALLBACK
+============================================================
 */
 
 async function askOpenAI(
@@ -533,7 +531,9 @@ async function askOpenAI(
 Memórias importantes sobre o usuário:
 
 ${memories
-  .map(item => `- ${item.memory}`)
+  .map(
+    item => `- ${item.memory}`
+  )
   .join("\n")}
 `
       : "";
@@ -572,7 +572,9 @@ ${memories
                   : "user",
 
               content:
-                item.parts?.[0]?.text || ""
+                item.parts?.[0]?.text ||
+                item.content ||
+                ""
             })),
 
             {
@@ -581,13 +583,14 @@ ${memories
             }
           ],
 
-          max_output_tokens: 1000
+          max_output_tokens: 600
         })
       }
     );
 
   const data =
-    await response.json()
+    await response
+      .json()
       .catch(() => ({}));
 
   if (!response.ok) {
@@ -610,9 +613,9 @@ ${memories
 }
 
 /*
-  ============================================================
-  ENDPOINT
-  ============================================================
+============================================================
+ENDPOINT
+============================================================
 */
 
 export async function onRequestPost(context) {
@@ -644,10 +647,6 @@ export async function onRequestPost(context) {
       );
     }
 
-    /*
-      Identificador permanente enviado pelo script.js.
-    */
-
     const userId =
       typeof body?.userId === "string" &&
       body.userId.trim()
@@ -655,13 +654,14 @@ export async function onRequestPost(context) {
         : "default-user";
 
     /*
-      Histórico da conversa atual.
+      Mantemos somente as últimas 8 mensagens.
+      Isso reduz o tamanho da requisição.
     */
 
     const history =
       Array.isArray(body?.history)
         ? body.history
-            .slice(-12)
+            .slice(-8)
             .filter(
               item =>
                 item &&
@@ -684,9 +684,9 @@ export async function onRequestPost(context) {
         : [];
 
     /*
-      --------------------------------------------------------
-      1. RECUPERA AS MEMÓRIAS
-      --------------------------------------------------------
+      Recupera as memórias antes da resposta,
+      pois elas realmente são necessárias
+      para a NEXA responder corretamente.
     */
 
     const memories =
@@ -695,18 +695,13 @@ export async function onRequestPost(context) {
         userId
       );
 
-    console.log(
-      `Memórias encontradas para ${userId}:`,
-      memories.length
-    );
+    let lastError = null;
 
     /*
-      --------------------------------------------------------
-      2. TENTA GEMINI
-      --------------------------------------------------------
+    ==========================================================
+    GEMINI
+    ==========================================================
     */
-
-    let lastError = null;
 
     for (const model of GEMINI_MODELS) {
       try {
@@ -724,36 +719,60 @@ export async function onRequestPost(context) {
           );
 
         /*
-          ----------------------------------------------------
-          3. EXTRAI NOVA MEMÓRIA
-          ----------------------------------------------------
+        ========================================================
+        IMPORTANTE:
+
+        A resposta é enviada AGORA.
+
+        A memória não bloqueia mais a resposta.
+        ========================================================
         */
 
-        const newMemory =
-          await extractMemory(
-            context.env,
-            message
+        if (
+          context.waitUntil &&
+          context.env.DB
+        ) {
+          context.waitUntil(
+            (async () => {
+
+              try {
+
+                const newMemory =
+                  await extractMemory(
+                    context.env,
+                    message
+                  );
+
+                if (newMemory) {
+
+                  await saveMemory(
+                    context.env.DB,
+                    userId,
+                    newMemory
+                  );
+                }
+
+              } catch (error) {
+
+                console.error(
+                  "Memória em segundo plano falhou:",
+                  error?.message
+                );
+
+              }
+
+            })()
           );
-
-        let memorySaved = false;
-
-        if (newMemory) {
-          memorySaved =
-            await saveMemory(
-              context.env.DB,
-              userId,
-              newMemory
-            );
         }
 
         return json({
           reply,
           provider: "gemini",
-          model,
-          memorySaved
+          model
         });
 
       } catch (error) {
+
         lastError =
           error?.message ||
           "Erro desconhecido";
@@ -766,13 +785,15 @@ export async function onRequestPost(context) {
     }
 
     /*
-      --------------------------------------------------------
-      4. FALLBACK OPENAI
-      --------------------------------------------------------
+    ==========================================================
+    FALLBACK OPENAI
+    ==========================================================
     */
 
     if (context.env.OPENAI_API_KEY) {
+
       try {
+
         const reply =
           await askOpenAI(
             context.env,
@@ -781,30 +802,50 @@ export async function onRequestPost(context) {
             memories
           );
 
-        const newMemory =
-          await extractMemory(
-            context.env,
-            message
+        if (
+          context.waitUntil &&
+          context.env.DB
+        ) {
+          context.waitUntil(
+            (async () => {
+
+              try {
+
+                const newMemory =
+                  await extractMemory(
+                    context.env,
+                    message
+                  );
+
+                if (newMemory) {
+
+                  await saveMemory(
+                    context.env.DB,
+                    userId,
+                    newMemory
+                  );
+                }
+
+              } catch (error) {
+
+                console.error(
+                  "Memória em segundo plano falhou:",
+                  error?.message
+                );
+
+              }
+
+            })()
           );
-
-        let memorySaved = false;
-
-        if (newMemory) {
-          memorySaved =
-            await saveMemory(
-              context.env.DB,
-              userId,
-              newMemory
-            );
         }
 
         return json({
           reply,
-          provider: "openai",
-          memorySaved
+          provider: "openai"
         });
 
       } catch (openaiError) {
+
         console.error(
           "OpenAI também falhou:",
           openaiError?.message
@@ -813,9 +854,9 @@ export async function onRequestPost(context) {
     }
 
     /*
-      --------------------------------------------------------
-      5. NENHUM MODELO FUNCIONOU
-      --------------------------------------------------------
+    ==========================================================
+    ERRO
+    ==========================================================
     */
 
     return json(
@@ -827,6 +868,7 @@ export async function onRequestPost(context) {
     );
 
   } catch (error) {
+
     console.error(
       "NEXA ERROR:",
       error
