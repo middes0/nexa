@@ -148,7 +148,7 @@ function prepareImage(file) {
       const image = new Image();
 
       image.onload = function() {
-        const maxSide = 1600;
+        const maxSide = 1024;
         const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
         const width = Math.max(1, Math.round(image.width * scale));
         const height = Math.max(1, Math.round(image.height * scale));
@@ -160,7 +160,7 @@ function prepareImage(file) {
         const context = canvas.getContext("2d");
         context.drawImage(image, 0, 0, width, height);
 
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
 
         if (dataUrl.length > 16 * 1024 * 1024) {
           reject(new Error("Não consegui reduzir essa imagem o suficiente."));
@@ -1567,7 +1567,7 @@ function updateStreamingMessage(paragraph, text) {
 
 
 async function askNexaWithImage(text, imageData) {
-  const response = await fetch(API_URL, {
+  conversationImageData = imageData;\n  saveActiveConversation();\n\n  const response = await fetch(API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
