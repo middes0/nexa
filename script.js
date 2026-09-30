@@ -181,6 +181,7 @@ let wakeRecognition = null;
 let wakeListening = false;
 let wakeRestartTimer = null;
 let wakeCommandMode = false;
+let wakePermissionGranted = false;
 
 function startWakeWord() {
   const SpeechRecognition =
@@ -262,6 +263,7 @@ function startWakeWord() {
   try {
     wakeRecognition.start();
   } catch (error) {
+    wakeListening = false;
     scheduleWakeRestart();
   }
 }
@@ -278,13 +280,26 @@ function scheduleWakeRestart() {
   }, 700);
 }
 
+function enableWakeWord() {
+  if (
+    !("SpeechRecognition" in window) &&
+    !("webkitSpeechRecognition" in window)
+  ) {
+    return false;
+  }
+
+  wakePermissionGranted = true;
+  startWakeWord();
+  return true;
+}
+
 if (
   "SpeechRecognition" in window ||
   "webkitSpeechRecognition" in window
 ) {
-  window.addEventListener("load", function() {
-    setTimeout(startWakeWord, 1200);
-  });
+  // Browsers often block microphone recognition until the user
+  // performs a gesture. The first microphone interaction unlocks it.
+  micButton.title = "Ativar escuta da NEXA";
 }
 
 /* =========================
@@ -1169,6 +1184,10 @@ composer.addEventListener(
       window.speechSynthesis.cancel();
     }
 
+    if (!wakePermissionGranted) {
+      enableWakeWord();
+    }
+
     const localCommand = handleNaturalLocalCommand(text);
 
     addMessage(text, "user");
@@ -1223,6 +1242,12 @@ composer.addEventListener(
 micButton.addEventListener(
   "click",
   function() {
+    if (!wakePermissionGranted) {
+      if (enableWakeWord()) {
+        micButton.title = "Escuta da NEXA ativada";
+        return;
+      }
+    }
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
