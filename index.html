@@ -34,6 +34,7 @@
 </aside>
         <button type="button" id="historyButton" class="history-button" aria-label="Abrir histórico" title="Histórico">☰</button>
         <button type="button" id="memoryButton" class="memory-button" aria-label="Abrir memórias" title="Memórias">◈</button>
+        <button type="button" id="automationButton" class="automation-button" aria-label="Abrir automações" title="Automações">⌁</button>
         <button type="button" id="newChatButton" class="new-chat-button">
           Nova conversa
         </button>
@@ -51,6 +52,25 @@
       </div>
 
       <div class="history-list" id="historyList"></div>
+    </aside>
+
+    <div class="automation-overlay" id="automationOverlay"></div>
+    <aside class="automation-panel" id="automationPanel" aria-label="Automações da NEXA">
+      <div class="automation-header">
+        <div>
+          <strong>Automações</strong>
+          <span>Lembretes e rotinas da NEXA</span>
+        </div>
+        <button type="button" id="closeAutomationButton" class="automation-close" aria-label="Fechar automações">×</button>
+      </div>
+      <div class="automation-content">
+        <div class="automation-summary" id="automationSummary"></div>
+        <div class="automation-tabs">
+          <button type="button" class="automation-tab active" data-automation-tab="reminders">Lembretes</button>
+          <button type="button" class="automation-tab" data-automation-tab="routines">Rotinas</button>
+        </div>
+        <div class="automation-list" id="automationList"></div>
+      </div>
     </aside>
 
     <div class="memory-overlay" id="memoryOverlay"></div>
@@ -154,6 +174,6 @@
   </main>
 
   <script src="automation.js"></script>
-  <script src="script.js?v=13"></script>
+  <script src="script.js?v=14"></script>
 </body>
 </html>
