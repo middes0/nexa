@@ -2449,3 +2449,34 @@ button:disabled {
     max-width: 68vw;
   }
 }
+
+/* Controle de voz */
+.speech-toggle-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid #2b203d;
+  border-radius: 11px;
+  background: #120d1b !important;
+  color: #b99cff !important;
+  cursor: pointer;
+  font-size: 16px;
+}
+.speech-toggle-button:hover {
+  color: #fff !important;
+  border-color: #8b5cf6;
+  background: #21162f !important;
+}
+.speech-toggle-button.muted {
+  color: #71687d !important;
+  border-color: #241936;
+  background: #0d0913 !important;
+}
+@media (max-width: 600px) {
+  .speech-toggle-button {
+    width: 36px;
+    height: 36px;
+  }
+}
