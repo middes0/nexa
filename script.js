@@ -275,7 +275,7 @@ function renderWebSources(sources, message) {
       return (
         source &&
         typeof source.url === "string" &&
-        /^https?:\\/\\//i.test(source.url) &&
+        (source.url.startsWith("https://") || source.url.startsWith("http://")) &&
         typeof source.title === "string" &&
         source.title.trim()
       );
