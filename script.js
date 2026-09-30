@@ -1782,7 +1782,8 @@ async function askNexa(text) {
       message: text,
       history: history.slice(-12),
       userId,
-      mode: responseMode,
+      // No modo de voz, priorizamos resposta rápida em vez de raciocínio profundo.
+      mode: window.NEXAVoiceMode?.isActive?.() ? "none" : responseMode,
       imageContext: conversationImageData
     })
   });
