@@ -31,6 +31,118 @@ jobs:
         run: |
           npx cap sync android
 
+      - name: Add native voice background service
+        run: |
+          mkdir -p android/app/src/main/java/com/nexa/assistant
+          cp native/NEXAVoiceService.java android/app/src/main/java/com/nexa/assistant/NEXAVoiceService.java
+          cp native/NEXAReminderReceiver.java android/app/src/main/java/com/nexa/assistant/NEXAReminderReceiver.java
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          permissions = [
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />',
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+          ]
+
+          marker = "<application"
+          if marker not in text:
+              raise SystemExit("Não encontrei a tag <application> no AndroidManifest.xml")
+
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace(marker, permission + "\n" + marker, 1)
+
+          service = '''        <service
+              android:name=".NEXAVoiceService"
+              android:enabled="true"
+              android:exported="false"
+              android:foregroundServiceType="microphone" />
+
+          <receiver
+              android:name=".NEXAReminderReceiver"
+              android:enabled="true"
+              android:exported="false" />
+          '''
+
+          if "android:name=".NEXAVoiceService"" not in text:
+              text = text.replace("</application>", service + "</application>", 1)
+
+          manifest.write_text(text)
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          activity = Path("android/app/src/main/java/com/nexa/assistant/MainActivity.java")
+          text = activity.read_text()
+
+          if "android.Manifest" not in text:
+              text = text.replace(
+                  "package com.nexa.assistant;",
+                  "package com.nexa.assistant;\n\nimport android.Manifest;\nimport android.content.Intent;\nimport android.content.pm.PackageManager;\nimport android.os.Build;"
+              )
+
+          on_create = '''\n    @Override
+              protected void onCreate(android.os.Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  requestNexaVoicePermissions();
+              }
+
+              private void requestNexaVoicePermissions() {
+                  java.util.ArrayList<String> permissions = new java.util.ArrayList<>();
+
+                  if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                      permissions.add(Manifest.permission.RECORD_AUDIO);
+                  }
+
+                  if (Build.VERSION.SDK_INT >= 33 &&
+                      checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                      permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+                  }
+
+                  if (permissions.isEmpty()) {
+                      startNexaVoiceService();
+                  } else {
+                      requestPermissions(permissions.toArray(new String[0]), 7401);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == 7401) {
+                      boolean granted = true;
+                      for (int result : grantResults) {
+                          if (result != PackageManager.PERMISSION_GRANTED) {
+                              granted = false;
+                              break;
+                          }
+                      }
+                      if (granted) startNexaVoiceService();
+                  }
+              }
+
+              private void startNexaVoiceService() {
+                  Intent intent = new Intent(this, NEXAVoiceService.class);
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(intent);
+                  } else {
+                      startService(intent);
+                  }
+              }
+          '''
+          if "requestNexaVoicePermissions" not in text:
+              text = text.replace("\n}", on_create + "\n}\n", 1)
+
+          activity.write_text(text)
+          PY
+
       - name: Enable exact Android alarms
         run: |
           python3 - <<'PY'
