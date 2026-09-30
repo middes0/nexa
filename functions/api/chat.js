@@ -226,7 +226,7 @@ function tokenizeCalculator(expression) {
   while (i < expression.length) {
     const char = expression[i];
 
-    if (/\\s/.test(char)) {
+    if (/\s/.test(char)) {
       i++;
       continue;
     }
@@ -246,15 +246,15 @@ function tokenizeCalculator(expression) {
       continue;
     }
 
-    if ("+-*/%()".includes(char)) {
-      tokens.push({ type: char, value: char });
-      i++;
-      continue;
-    }
-
     if (char === "*" && expression[i + 1] === "*") {
       tokens.push({ type: "^", value: "^" });
       i += 2;
+      continue;
+    }
+
+    if ("+-*/%()".includes(char)) {
+      tokens.push({ type: char, value: char });
+      i++;
       continue;
     }
 
@@ -382,14 +382,14 @@ function shouldUseCalculator(message) {
 
   const hasMathSignal =
     /[+*/%^]/.test(text) ||
-    /\\d+\\s*[x×]\\s*\\d+/.test(text) ||
-    /\\d+\\s*(de|por cento|%)\\s*\\d+/.test(text);
+    /\d+\s*/[x×]\\s*\\d+/.test(text) ||
+    /\d+\s*/(de|por cento|%)\\s*\\d+/.test(text);
 
   const hasCalculationWord =
     /quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/.test(text);
 
   const mostlyMath =
-    /^[0-9\\s+\\-*/().,%^x×de]+$/.test(text);
+    /^[0-9\s+\\-*/().,%^x×de]+$/.test(text);
 
   return hasMathSignal && (hasCalculationWord || mostlyMath);
 }
@@ -704,13 +704,13 @@ function createCalculatorResponse(toolResult) {
     start(controller) {
       controller.enqueue(
         encoder.encode(
-          "data: " + JSON.stringify({ type: "text", text }) + "\\n\\n"
+          "data: " + JSON.stringify({ type: "text", text }) + "\n\n"
         )
       );
 
       controller.enqueue(
         encoder.encode(
-          "data: " + JSON.stringify({ type: "done", model: "nexa-calculator" }) + "\\n\\n"
+          "data: " + JSON.stringify({ type: "done", model: "nexa-calculator" }) + "\n\n"
         )
       );
 
@@ -1021,6 +1021,7 @@ export async function onRequestPost(context) {
           result.decoder,
           result.buffer,
           result.firstText,
+          result.firstSources,
           userId,
           userMessage,
           context,
