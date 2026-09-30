@@ -785,6 +785,7 @@ function saveActiveConversation() {
   if (!conversation) return;
 
   conversation.messages = history.slice();
+  conversation.imageData = conversationImageData || "";
   conversation.title = makeConversationTitle(history);
   conversation.updatedAt = Date.now();
 
@@ -797,6 +798,7 @@ function createConversation() {
     id: "conversation_" + crypto.randomUUID(),
     title: "Nova conversa",
     messages: [],
+    imageData: "",
     updatedAt: Date.now()
   };
 
@@ -1680,7 +1682,8 @@ async function askNexa(text) {
       message: text,
       history: history.slice(-12),
       userId,
-      mode: responseMode
+      mode: responseMode,
+      imageContext: conversationImageData
     })
   });
 
