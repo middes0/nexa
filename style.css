@@ -3281,3 +3281,150 @@ footer {
     width: min(100vw, 390px);
   }
 }
+
+
+/* NEXA: barra superior organizada e configurações funcionais */
+.topbar {
+  flex-wrap: wrap;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+.topbar-actions > .icon-button {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.topbar-actions > #historyButton {
+  margin-left: 5px;
+}
+.topbar-actions > #historyButton::before {
+  content: "";
+  position: absolute;
+}
+.topbar-actions > #newChatButton {
+  white-space: nowrap;
+  min-height: 38px;
+}
+.settings-content {
+  display: grid;
+  gap: 7px;
+}
+.settings-section {
+  margin-bottom: 14px;
+}
+.settings-control {
+  cursor: default;
+}
+.settings-control:hover {
+  border-color: rgba(185,156,255,.2);
+  background: #120d1b !important;
+}
+.settings-control > span:nth-child(2) {
+  min-width: 0;
+}
+.settings-control select {
+  max-width: 116px;
+  min-width: 92px;
+  padding: 8px 26px 8px 9px;
+  border: 1px solid #39284f;
+  border-radius: 9px;
+  background: #0b0810;
+  color: #eee9f4;
+  font: inherit;
+  font-size: 12px;
+  color-scheme: dark;
+}
+.settings-control select:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+.settings-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex: 0 0 44px;
+  padding: 3px;
+  border: 1px solid #463653;
+  border-radius: 999px;
+  background: #211a2a !important;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease;
+}
+.settings-switch span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #a59aaf;
+  transition: transform .18s ease, background .18s ease;
+}
+.settings-switch.active {
+  background: #6336b4 !important;
+  border-color: #9b70f4;
+}
+.settings-switch.active span {
+  transform: translateX(18px);
+  background: #fff;
+}
+.settings-switch:focus-visible {
+  outline: 2px solid #b99cff;
+  outline-offset: 3px;
+}
+body.nexa-reduced-motion *,
+body.nexa-reduced-motion *::before,
+body.nexa-reduced-motion *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: .01ms !important;
+}
+@media (max-width: 760px) {
+  .topbar {
+    align-items: center;
+  }
+  .topbar-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .topbar-actions > #historyButton {
+    margin-left: 0;
+  }
+  .topbar-actions > #newChatButton {
+    margin-left: auto;
+  }
+}
+@media (max-width: 420px) {
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    width: 100%;
+  }
+  .topbar-actions > .icon-button {
+    width: 100%;
+    min-width: 0;
+  }
+  .topbar-actions > #newChatButton {
+    grid-column: 1 / -1;
+    margin: 2px 0 0;
+  }
+  .settings-control {
+    grid-template-columns: 34px minmax(0,1fr) auto;
+    gap: 9px;
+    padding: 11px;
+  }
+  .settings-item-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .settings-control select {
+    max-width: 105px;
+    min-width: 88px;
+  }
+}
