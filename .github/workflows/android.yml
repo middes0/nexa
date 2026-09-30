@@ -70,7 +70,7 @@ jobs:
               android:exported="false" />
           '''
 
-          if "android:name=".NEXAVoiceService"" not in text:
+          if 'android:name=".NEXAVoiceService"' not in text:
               text = text.replace("</application>", service + "</application>", 1)
 
           manifest.write_text(text)
