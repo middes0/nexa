@@ -1,5 +1,5 @@
-const PRIMARY_MODEL = "gemini-3.6-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+const PRIMARY_MODEL = "openai/gpt-oss-20b";
+const FALLBACK_MODEL = "openai/gpt-oss-120b";
 
 const SYSTEM_PROMPT = [
   "Você é NEXA.",
@@ -99,7 +99,7 @@ async function cleanMemory(env, userId) {
 }
 
 async function extractMemory(env, userId, userMessage, assistantMessage) {
-  if (!env.GEMINI_API_KEY || !userId) return;
+  if (!env.GROQ_API_KEY || !userId) return;
 
   const prompt =
     "Analise a conversa abaixo.\n\n" +
@@ -114,25 +114,27 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
 
   try {
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      FALLBACK_MODEL + ":generateContent",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-goog-api-key": env.GEMINI_API_KEY
+          "Authorization": "Bearer " + env.GROQ_API_KEY
         },
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: "Extraia apenas memórias úteis e verdadeiras do usuário." }]
-          },
-          contents: [{
-            role: "user",
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            maxOutputTokens: 100
-          }
+          model: FALLBACK_MODEL,
+          messages: [
+            {
+              role: "system",
+              content: "Extraia apenas memórias úteis e verdadeiras do usuário."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_completion_tokens: 100,
+          temperature: 0
         })
       }
     );
@@ -142,7 +144,7 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
     const data = await response.json();
 
     const memory =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+      data?.choices?.[0]?.message?.content?.trim() || "";
 
     if (
       memory &&
@@ -434,39 +436,69 @@ function getThinkingConfig(mode) {
 }
 
 function createModelRequest(model, apiKey, messages, memories, signal, mode, useWebSearch) {
-  const generationConfig = {
-    maxOutputTokens:
+  const groqMessages = [];
+
+  groqMessages.push({
+    role: "system",
+    content: SYSTEM_PROMPT
+  });
+
+  if (memories.length) {
+    groqMessages.push({
+      role: "system",
+      content:
+        "Memórias relevantes sobre o usuário:\n" +
+        memories.map(function(memory) {
+          return "- " + memory;
+        }).join("\n")
+    });
+  }
+
+  for (const message of messages) {
+    if (!message || !message.content) continue;
+
+    groqMessages.push({
+      role:
+        message.role === "assistant"
+          ? "assistant"
+          : "user",
+      content: String(message.content)
+    });
+  }
+
+  const body = {
+    model,
+    messages: groqMessages,
+    max_completion_tokens:
       mode === "maximum"
         ? 1024
         : mode === "high"
           ? 768
-          : 512
+          : 512,
+    stream: true
   };
 
-  const thinkingConfig = getThinkingConfig(mode);
-
-  if (model === PRIMARY_MODEL && thinkingConfig) {
-    generationConfig.thinkingConfig = thinkingConfig;
+  if (model === PRIMARY_MODEL && mode !== "none") {
+    body.reasoning_effort =
+      mode === "maximum"
+        ? "high"
+        : mode === "high"
+          ? "high"
+          : mode === "medium"
+            ? "medium"
+            : "low";
   }
 
   return fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" +
-    model + ":streamGenerateContent?alt=sse",
+    "https://api.groq.com/openai/v1/chat/completions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-goog-api-key": apiKey
+        "Authorization": "Bearer " + apiKey
       },
       signal,
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }]
-        },
-        contents: buildContents(messages, memories),
-        generationConfig,
-        ...(useWebSearch ? { tools: [{ google_search: {} }] } : {})
-      })
+      body: JSON.stringify(body)
     }
   );
 }
@@ -491,16 +523,9 @@ function parseSSEEvent(raw) {
 }
 
 function extractText(data) {
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  let text = "";
-
-  for (const part of parts) {
-    if (part?.thought === true) continue;
-    if (typeof part?.text === "string") text += part.text;
-  }
-
-  return text;
+  return data?.choices?.[0]?.delta?.content || "";
 }
+
 
 async function waitForFirstText(response, model) {
   if (!response.ok) {
@@ -540,21 +565,13 @@ async function waitForFirstText(response, model) {
           decoder,
           buffer,
           firstText: text,
-          firstSources:
-            (data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
-              .map(function(chunk) {
-                const web = chunk?.web;
-                if (!web || typeof web.uri !== "string" || typeof web.title !== "string") {
-                  return null;
-                }
-                return { title: web.title, url: web.uri };
-              })
-              .filter(Boolean)
+          firstSources: []
         };
       }
     }
   }
 }
+
 
 function createClientStream(
   env,
@@ -615,27 +632,6 @@ function createClientStream(
             if (!data) continue;
 
             const text = extractText(data);
-
-            const chunks =
-              data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-
-            for (const chunk of chunks) {
-              const web = chunk?.web;
-
-              if (
-                web &&
-                typeof web.uri === "string" &&
-                typeof web.title === "string" &&
-                !webSources.some(function(source) {
-                  return source.url === web.uri;
-                })
-              ) {
-                webSources.push({
-                  title: web.title,
-                  url: web.uri
-                });
-              }
-            }
 
             if (!text) continue;
 
@@ -738,131 +734,6 @@ function createCalculatorResponse(toolResult) {
   });
 }
 
-async function createFallbackResponse(
-  env,
-  messages,
-  memories,
-  userId,
-  userMessage,
-  executionContext,
-  mode
-) {
-  const generationConfig = {
-    maxOutputTokens:
-      mode === "maximum"
-        ? 1024
-        : mode === "high"
-          ? 768
-          : 512
-  };
-
-  const thinkingConfig = getThinkingConfig(mode);
-
-  if (thinkingConfig) {
-    generationConfig.thinkingConfig = thinkingConfig;
-  }
-
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" +
-    FALLBACK_MODEL + ":generateContent",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-goog-api-key": env.GEMINI_API_KEY
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }]
-        },
-        contents: buildContents(messages, memories),
-        generationConfig,
-        tools: [{ google_search: {} }]
-      })
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      FALLBACK_MODEL + " HTTP " + response.status + ": " + errorText
-    );
-  }
-
-  const data = await response.json();
-
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-
-  const groundingSources =
-    (data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
-      .map(function(chunk) {
-        const web = chunk?.web;
-        if (!web || typeof web.uri !== "string" || typeof web.title !== "string") {
-          return null;
-        }
-        return { title: web.title, url: web.uri };
-      })
-      .filter(Boolean);
-
-  const text = parts
-    .filter(function(part) {
-      return (
-        part?.thought !== true &&
-        typeof part?.text === "string"
-      );
-    })
-    .map(function(part) {
-      return part.text;
-    })
-    .join("");
-
-  if (!text.trim()) {
-    throw new Error(FALLBACK_MODEL + " respondeu sem texto.");
-  }
-
-  const encoder = new TextEncoder();
-
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(
-        encoder.encode(
-          "data: " +
-          JSON.stringify({ type: "text", text }) +
-          "\n\n"
-        )
-      );
-
-      controller.enqueue(
-        encoder.encode(
-          "data: " +
-          JSON.stringify({
-            type: "done",
-            model: FALLBACK_MODEL,
-            sources: groundingSources.slice(0, 8)
-          }) +
-          "\n\n"
-        )
-      );
-
-      if (executionContext?.waitUntil) {
-        executionContext.waitUntil(
-          extractMemory(env, userId, userMessage, text)
-        );
-      }
-
-      controller.close();
-    }
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "Connection": "keep-alive",
-      ...CORS_HEADERS
-    }
-  });
-}
 
 export async function onRequestOptions() {
   return new Response(null, {
@@ -876,10 +747,10 @@ export async function onRequestPost(context) {
   const env = context.env;
 
   try {
-    if (!env.GEMINI_API_KEY) {
+    if (!env.GROQ_API_KEY) {
       return jsonResponse(
         {
-          error: "GEMINI_API_KEY não configurada no Cloudflare."
+          error: "GROQ_API_KEY não configurada no Cloudflare."
         },
         500
       );
@@ -981,7 +852,7 @@ export async function onRequestPost(context) {
     try {
       const response = await createModelRequest(
         PRIMARY_MODEL,
-        env.GEMINI_API_KEY,
+        env.GROQ_API_KEY,
         messages,
         memories,
         controller.signal,
@@ -1014,7 +885,7 @@ export async function onRequestPost(context) {
       try {
         const response = await createModelRequest(
           FALLBACK_MODEL,
-          env.GEMINI_API_KEY,
+          env.GROQ_API_KEY,
           messages,
           memories,
           null,
