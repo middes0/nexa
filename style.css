@@ -2049,3 +2049,57 @@ body.memory-open {
   opacity: 0.5;
   cursor: wait;
 }
+
+
+/* =========================
+   RESET GLOBAL DE BOTÕES
+========================= */
+
+button {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar button,
+.history-panel button,
+.memory-panel button,
+.composer button,
+.mode-menu button {
+  color-scheme: dark;
+}
+
+.topbar button {
+  background-color: #120d1b;
+  color: #b99cff;
+  border: 1px solid #2b203d;
+}
+
+.topbar button:hover {
+  background-color: #21162f;
+  color: #fff;
+  border-color: #8b5cf6;
+}
+
+.history-panel button,
+.memory-panel button {
+  background-color: #15101e;
+  color: #b99cff;
+}
+
+.history-panel .history-open,
+.history-panel .history-delete,
+.memory-panel .memory-delete {
+  background-color: transparent;
+}
+
+.history-panel .history-open:hover,
+.history-panel .history-delete:hover,
+.memory-panel .memory-delete:hover {
+  background-color: rgba(139, 92, 246, 0.14);
+}
+
+button:disabled {
+  color: #6f657a;
+}
