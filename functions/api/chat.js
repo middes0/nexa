@@ -150,6 +150,80 @@ async function createElevenSpeechResponse(apiKey, voiceId, text) {
   });
 }
 
+
+async function createVisionResponse(apiKey, userMessage, imageDataUrl) {
+  if (!apiKey) {
+    return jsonResponse({ error: "GROQ_API_KEY não configurada no Cloudflare." }, 500);
+  }
+
+  if (!imageDataUrl || !/^data:image\/(png|jpe?g|webp);base64,/i.test(imageDataUrl)) {
+    return jsonResponse({ error: "Imagem inválida ou formato não suportado." }, 400);
+  }
+
+  if (imageDataUrl.length > 16 * 1024 * 1024) {
+    return jsonResponse({ error: "A imagem ficou grande demais. Tente uma imagem menor." }, 413);
+  }
+
+  const prompt = userMessage || "Analise esta imagem e descreva o que você observa.";
+
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model: "qwen/qwen3.8-27b",
+        messages: [
+          {
+            role: "system",
+            content:
+              SYSTEM_PROMPT +
+              "\n\nVocê também consegue analisar imagens. Descreva somente o que estiver visível e deixe claro quando algo não puder ser identificado com segurança."
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: prompt
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageDataUrl
+                }
+              }
+            ]
+          }
+        ],
+        max_completion_tokens: 1024,
+        temperature: 0.2,
+        stream: false
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error("Visão HTTP " + response.status + ": " + errorText);
+  }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content?.trim() || "";
+
+  if (!text) {
+    throw new Error("A análise da imagem não retornou texto.");
+  }
+
+  return createWebSearchStream({
+    text,
+    sources: []
+  });
+}
+
 function jsonResponse(data, status) {
   return new Response(JSON.stringify(data), {
     status: status || 200,
@@ -1319,6 +1393,24 @@ export async function onRequestPost(context) {
             error:
               error?.message ||
               "Não consegui carregar as vozes da ElevenLabs."
+          },
+          503
+        );
+      }
+    }
+
+
+    if (apiAction === "analyze_image") {
+      try {
+        return await createVisionResponse(
+          env.GROQ_API_KEY,
+          typeof body?.message === "string" ? body.message.trim().slice(0, 4000) : "",
+          typeof body?.image === "string" ? body.image : ""
+        );
+      } catch (error) {
+        return jsonResponse(
+          {
+            error: error?.message || "Não consegui analisar essa imagem."
           },
           503
         );
