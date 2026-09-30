@@ -841,9 +841,13 @@ function prefetchVoiceQueue() {
 
   const token = voiceSpeechToken;
 
-  // Pré-carrega até duas frases futuras. O áudio da próxima frase
-  // fica pronto enquanto a atual está sendo reproduzida.
-  voiceSpeechQueue.slice(0, 1).forEach(function(item) {
+  // A primeira frase usa TTS em streaming para começar a falar
+  // o mais cedo possível. Enquanto ela toca, pré-carregamos a próxima.
+  const candidates = voiceSpeechRunning
+    ? voiceSpeechQueue.slice(0, 2)
+    : voiceSpeechQueue.slice(1, 3);
+
+  candidates.forEach(function(item) {
     if (item.audioPromise || item.audioUrl) return;
 
     item.audioPromise = fetchElevenLabsAudio(item.text, token)
