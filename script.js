@@ -4,10 +4,16 @@ const chat = document.getElementById("chat");
 const micButton = document.getElementById("micButton");
 const sendButton = composer.querySelector('button[type="submit"]');
 const newChatButton = document.getElementById("newChatButton");
+const historyButton = document.getElementById("historyButton");
+const historyPanel = document.getElementById("historyPanel");
+const historyList = document.getElementById("historyList");
+const closeHistoryButton = document.getElementById("closeHistoryButton");
 const modeButton = document.getElementById("modeButton");
 const modeMenu = document.getElementById("modeMenu");
 
 const MEMORY_KEY = "nexa_conversation";
+const CONVERSATIONS_KEY = "nexa_conversations";
+const ACTIVE_CONVERSATION_KEY = "nexa_active_conversation";
 const USER_ID_KEY = "nexa_user_id";
 const MODE_KEY = "nexa_response_mode";
 const API_URL = "https://nexa-2.pages.dev/api/chat";
@@ -41,6 +47,8 @@ const MODE_INFO = {
 };
 
 const history = [];
+let conversations = [];
+let activeConversationId = null;
 
 let responseMode =
   localStorage.getItem(MODE_KEY) || "medium";
@@ -181,6 +189,277 @@ function saveMemory() {
     MEMORY_KEY,
     JSON.stringify(history)
   );
+
+  saveActiveConversation();
+}
+
+function makeConversationTitle(messages) {
+  const firstUserMessage = messages.find(function(item) {
+    return item && item.role === "user" && item.content;
+  });
+
+  if (!firstUserMessage) return "Nova conversa";
+
+  const title = String(firstUserMessage.content)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return title.length > 42
+    ? title.slice(0, 42).trimEnd() + "..."
+    : title;
+}
+
+function saveConversations() {
+  localStorage.setItem(
+    CONVERSATIONS_KEY,
+    JSON.stringify(conversations)
+  );
+}
+
+function saveActiveConversation() {
+  if (!activeConversationId) return;
+
+  const conversation = conversations.find(function(item) {
+    return item.id === activeConversationId;
+  });
+
+  if (!conversation) return;
+
+  conversation.messages = history.slice();
+  conversation.title = makeConversationTitle(history);
+  conversation.updatedAt = Date.now();
+
+  saveConversations();
+  renderHistory();
+}
+
+function createConversation() {
+  const conversation = {
+    id: "conversation_" + crypto.randomUUID(),
+    title: "Nova conversa",
+    messages: [],
+    updatedAt: Date.now()
+  };
+
+  conversations.unshift(conversation);
+  activeConversationId = conversation.id;
+
+  saveConversations();
+  localStorage.setItem(
+    ACTIVE_CONVERSATION_KEY,
+    activeConversationId
+  );
+
+  return conversation;
+}
+
+function loadConversations() {
+  try {
+    const saved = localStorage.getItem(CONVERSATIONS_KEY);
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+
+      if (Array.isArray(parsed)) {
+        conversations = parsed.filter(function(item) {
+          return (
+            item &&
+            typeof item.id === "string" &&
+            Array.isArray(item.messages)
+          );
+        });
+      }
+    }
+  } catch (error) {
+    conversations = [];
+  }
+
+  activeConversationId =
+    localStorage.getItem(ACTIVE_CONVERSATION_KEY);
+
+  if (
+    !activeConversationId ||
+    !conversations.some(function(item) {
+      return item.id === activeConversationId;
+    })
+  ) {
+    const existingMessages = history.slice();
+
+    const current = createConversation();
+
+    if (existingMessages.length) {
+      current.messages = existingMessages;
+      current.title = makeConversationTitle(existingMessages);
+      saveConversations();
+    }
+  }
+
+  renderHistory();
+}
+
+function renderHistory() {
+  if (!historyList) return;
+
+  historyList.innerHTML = "";
+
+  const ordered = conversations
+    .slice()
+    .sort(function(a, b) {
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+
+  if (!ordered.length) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "Nenhuma conversa salva.";
+    historyList.appendChild(empty);
+    return;
+  }
+
+  ordered.forEach(function(conversation) {
+    const item = document.createElement("div");
+    item.className =
+      "history-item" +
+      (conversation.id === activeConversationId ? " active" : "");
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "history-open";
+    openButton.textContent = conversation.title || "Nova conversa";
+    openButton.addEventListener("click", function() {
+      openConversation(conversation.id);
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "history-delete";
+    deleteButton.textContent = "×";
+    deleteButton.title = "Excluir conversa";
+    deleteButton.addEventListener("click", function(event) {
+      event.stopPropagation();
+      deleteConversation(conversation.id);
+    });
+
+    item.appendChild(openButton);
+    item.appendChild(deleteButton);
+    historyList.appendChild(item);
+  });
+}
+
+function openHistoryPanel() {
+  renderHistory();
+  historyPanel.classList.add("open");
+}
+
+function closeHistoryPanel() {
+  historyPanel.classList.remove("open");
+}
+
+function openConversation(conversationId) {
+  const conversation = conversations.find(function(item) {
+    return item.id === conversationId;
+  });
+
+  if (!conversation) return;
+
+  history.length = 0;
+  history.push(
+    ...conversation.messages.filter(function(item) {
+      return (
+        item &&
+        typeof item.role === "string" &&
+        typeof item.content === "string"
+      );
+    })
+  );
+
+  activeConversationId = conversation.id;
+
+  localStorage.setItem(
+    ACTIVE_CONVERSATION_KEY,
+    activeConversationId
+  );
+
+  localStorage.setItem(
+    MEMORY_KEY,
+    JSON.stringify(history)
+  );
+
+  restoreConversation();
+  closeHistoryPanel();
+}
+
+function deleteConversation(conversationId) {
+  const conversation = conversations.find(function(item) {
+    return item.id === conversationId;
+  });
+
+  if (!conversation) return;
+
+  conversations = conversations.filter(function(item) {
+    return item.id !== conversationId;
+  });
+
+  if (activeConversationId === conversationId) {
+    const replacement = conversations
+      .slice()
+      .sort(function(a, b) {
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+      })[0];
+
+    if (replacement) {
+      openConversation(replacement.id);
+    } else {
+      const fresh = createConversation();
+
+      history.length = 0;
+      localStorage.removeItem(MEMORY_KEY);
+      restoreConversation();
+
+      activeConversationId = fresh.id;
+      localStorage.setItem(
+        ACTIVE_CONVERSATION_KEY,
+        activeConversationId
+      );
+    }
+  }
+
+  saveConversations();
+  renderHistory();
+}
+
+function startNewConversation() {
+  if (history.length) {
+    saveActiveConversation();
+  }
+
+  history.length = 0;
+
+  const fresh = createConversation();
+
+  activeConversationId = fresh.id;
+
+  localStorage.setItem(
+    ACTIVE_CONVERSATION_KEY,
+    activeConversationId
+  );
+
+  localStorage.removeItem(MEMORY_KEY);
+
+  hideTyping();
+
+  chat.innerHTML = `
+    <div class="message nexa">
+      <span class="label">NEXA</span>
+      <p>E aí. Nova conversa. Manda a boa.</p>
+    </div>
+  `;
+
+  renderHistory();
+  closeHistoryPanel();
+
+  input.value = "";
+  input.focus();
 }
 
 function loadMemory() {
@@ -512,8 +791,11 @@ function clearConversation() {
 
 newChatButton.addEventListener(
   "click",
-  clearConversation
+  startNewConversation
 );
+
+historyButton.addEventListener("click", openHistoryPanel);
+closeHistoryButton.addEventListener("click", closeHistoryPanel);
 
 /* =========================
    ENVIO
@@ -637,4 +919,20 @@ function restoreConversation() {
 }
 
 loadMemory();
+
+if (!activeConversationId) {
+  const existing = conversations.find(function(item) {
+    return item.messages && item.messages.length;
+  });
+
+  if (existing) {
+    activeConversationId = existing.id;
+  }
+}
+
+if (!activeConversationId) {
+  createConversation();
+}
+
 restoreConversation();
+renderHistory();
