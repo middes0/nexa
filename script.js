@@ -466,6 +466,171 @@ async function fetchElevenLabsAudio(text, token) {
   return URL.createObjectURL(blob);
 }
 
+async function playElevenLabsStream(text, token) {
+  if (!selectedVoice || !text || token !== voiceSpeechToken) return false;
+
+  if (
+    !window.MediaSource ||
+    !MediaSource.isTypeSupported ||
+    !MediaSource.isTypeSupported("audio/mpeg")
+  ) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "elevenlabs_tts",
+        voiceId: selectedVoice.id,
+        text: text.slice(0, 1800),
+        userId
+      })
+    });
+
+    if (!response.ok || !response.body) return false;
+    if (token !== voiceSpeechToken) return false;
+
+    const mediaSource = new MediaSource();
+    const objectUrl = URL.createObjectURL(mediaSource);
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.volume = 1;
+    audio.src = objectUrl;
+
+    if (elevenLabsAudio) {
+      try { elevenLabsAudio.pause(); } catch (error) {}
+      try { URL.revokeObjectURL(elevenLabsAudio.src); } catch (error) {}
+    }
+
+    elevenLabsAudio = audio;
+
+    return await new Promise(async function(resolve) {
+      let settled = false;
+      let sourceBuffer = null;
+      let streamEnded = false;
+      let playbackStarted = false;
+      const chunks = [];
+      const reader = response.body.getReader();
+
+      function cleanup() {
+        try { reader.cancel(); } catch (error) {}
+        try { audio.pause(); } catch (error) {}
+        try { URL.revokeObjectURL(objectUrl); } catch (error) {}
+        if (elevenLabsAudio === audio) elevenLabsAudio = null;
+      }
+
+      function finish(success) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(success);
+      }
+
+      function appendNext() {
+        if (
+          settled ||
+          !sourceBuffer ||
+          sourceBuffer.updating ||
+          !chunks.length
+        ) {
+          return;
+        }
+
+        try {
+          sourceBuffer.appendBuffer(chunks.shift());
+        } catch (error) {
+          finish(false);
+        }
+      }
+
+      sourceBuffer = null;
+
+      mediaSource.addEventListener("sourceopen", function() {
+        if (settled || token !== voiceSpeechToken) {
+          finish(false);
+          return;
+        }
+
+        try {
+          sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+          sourceBuffer.addEventListener("updateend", function() {
+            if (
+              streamEnded &&
+              !sourceBuffer.updating &&
+              !chunks.length &&
+              mediaSource.readyState === "open"
+            ) {
+              try { mediaSource.endOfStream(); } catch (error) {}
+            }
+
+            appendNext();
+          });
+          appendNext();
+        } catch (error) {
+          finish(false);
+        }
+      }, { once: true });
+
+      audio.onended = function() {
+        finish(true);
+      };
+
+      audio.onerror = function() {
+        finish(false);
+      };
+
+      try {
+        while (true) {
+          const result = await reader.read();
+
+          if (settled) return;
+          if (token !== voiceSpeechToken) {
+            finish(false);
+            return;
+          }
+
+          if (result.done) {
+            streamEnded = true;
+
+            if (
+              sourceBuffer &&
+              !sourceBuffer.updating &&
+              !chunks.length &&
+              mediaSource.readyState === "open"
+            ) {
+              try { mediaSource.endOfStream(); } catch (error) {}
+            }
+
+            break;
+          }
+
+          if (result.value && result.value.byteLength) {
+            chunks.push(result.value);
+
+            if (!playbackStarted && sourceBuffer) {
+              playbackStarted = true;
+              audio.play().catch(function() {
+                finish(false);
+              });
+            }
+
+            appendNext();
+          }
+        }
+      } catch (error) {
+        finish(false);
+      }
+    });
+  } catch (error) {
+    console.error("Erro no TTS em streaming:", error);
+    return false;
+  }
+}
+
 async function speakWithElevenLabs(text, options) {
   if (!selectedVoice || !text) return false;
 
@@ -585,11 +750,19 @@ async function processVoiceSpeechQueue() {
       url = await item.audioPromise;
     }
 
-    if (!url && selectedVoice) {
+    if (!url && !item.audioPromise && selectedVoice) {
+      success = await playElevenLabsStream(item.text, token);
+    }
+
+    if (!success && !url && item.audioPromise) {
+      url = await item.audioPromise;
+    }
+
+    if (!success && !url && selectedVoice) {
       url = await fetchElevenLabsAudio(item.text, token);
     }
 
-    if (url && token === voiceSpeechToken) {
+    if (!success && url && token === voiceSpeechToken) {
       const audio = new Audio(url);
       audio.preload = "auto";
       audio.volume = 1;
@@ -670,7 +843,7 @@ function prefetchVoiceQueue() {
 
   // Pré-carrega até duas frases futuras. O áudio da próxima frase
   // fica pronto enquanto a atual está sendo reproduzida.
-  voiceSpeechQueue.slice(0, 2).forEach(function(item) {
+  voiceSpeechQueue.slice(0, 1).forEach(function(item) {
     if (item.audioPromise || item.audioUrl) return;
 
     item.audioPromise = fetchElevenLabsAudio(item.text, token)
