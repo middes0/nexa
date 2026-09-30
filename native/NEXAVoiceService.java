@@ -61,6 +61,10 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
         readyToSpeak = status == TextToSpeech.SUCCESS;
         if (readyToSpeak) {
             tts.setLanguage(new Locale("pt", "BR"));
+            if (pendingWakeResponse) {
+                pendingWakeResponse = false;
+                speak("Estou ouvindo, pode falar.", "listen_command");
+            }
         }
     }
 
@@ -100,7 +104,12 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
 
     private void startCommandListening() {
         commandMode = true;
-        speak("Estou ouvindo, pode falar.", "listen_command");
+        if (readyToSpeak) {
+            speak("Estou ouvindo, pode falar.", "listen_command");
+        } else {
+            pendingWakeResponse = true;
+            startRecognition(true);
+        }
     }
 
     private void speak(String text, String utteranceId) {
