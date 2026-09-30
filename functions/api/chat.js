@@ -388,8 +388,12 @@ function shouldUseCalculator(message) {
   const hasCalculationWord =
     /quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/.test(text);
 
+  const allowedCalculatorChars = "0123456789 +-* /().,%^x×de";
   const mostlyMath =
-    /^[0-9\s+\\-*/().,%^x×de]+$/.test(text);
+    text.length > 0 &&
+    [...text].every(function(char) {
+      return allowedCalculatorChars.includes(char);
+    });
 
   return hasMathSignal && (hasCalculationWord || mostlyMath);
 }
