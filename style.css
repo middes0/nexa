@@ -2315,3 +2315,47 @@ button:disabled {
 .message.user .message-actions {
   display: none;
 }
+
+
+/* Corrige controles das respostas contra estilos globais do navegador */
+.message-actions button.message-action,
+.message-actions .message-action,
+.code-copy {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-weight: 500;
+  text-shadow: none;
+  outline: none;
+}
+
+.message-actions button.message-action {
+  color: #9d8ab8 !important;
+  background: #120d1b !important;
+  border: 1px solid #2b203d !important;
+}
+
+.message-actions button.message-action:hover {
+  color: #fff !important;
+  background: #21162f !important;
+  border-color: #8b5cf6 !important;
+}
+
+.message-actions button.message-action:focus-visible,
+.code-copy:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+.code-copy {
+  color: #b99cff !important;
+  background: #171021 !important;
+  border: 1px solid #2b203d !important;
+}
+
+.code-copy:hover {
+  color: #fff !important;
+  background: #241438 !important;
+  border-color: #8b5cf6 !important;
+}
