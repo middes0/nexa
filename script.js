@@ -47,10 +47,7 @@ if (!MODE_INFO[responseMode]) {
 function updateModeUI() {
   const info = MODE_INFO[responseMode];
 
-  modeButton.textContent =
-    responseMode === "maximum"
-      ? "MÁX"
-      : info.label.charAt(0).toUpperCase();
+  modeButton.textContent = info.label;
 
   modeButton.title = "Modo: " + info.label;
 
