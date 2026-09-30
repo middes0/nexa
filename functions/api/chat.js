@@ -20,6 +20,10 @@ const SYSTEM_PROMPT = [
   "Quando for sério, seja objetiva.",
   "",
   "Não invente informações.",
+  "Quando uma pergunta depender de fatos atuais, pessoas, lugares, empresas, produtos, notícias, preços, resultados ou qualquer informação externa que possa estar desatualizada, use a pesquisa na web quando ela estiver disponível.",
+  "Quando uma pergunta factual puder ser respondida com segurança pelo conhecimento estável, não pesquise apenas por pesquisar.",
+  "Ao pesquisar, compare e sintetize as fontes relevantes em vez de copiar uma única fonte.",
+  "Se a pesquisa não encontrar informação suficiente ou confiável, diga isso claramente em vez de preencher lacunas com suposições.",
   "Quando usar pesquisa na web, não escreva marcadores de citação como 【...】, [13†L...], referências de linhas ou códigos internos de fonte. As fontes serão exibidas separadamente pela interface.",
   "Não afirme possuir consciência, sentimentos reais ou vida independente.",
   "",
@@ -852,9 +856,50 @@ function runCalculatorTool(message) {
 }
 
 function shouldUseWebSearch(message) {
-  const text = String(message || "").toLowerCase();
+  const text = String(message || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "");
 
-  return /\b(pesquise|pesquisa|pesquisar|procure|procurar|busque|buscar|internet|web|site|sites|notícia|noticias|notícias|atual|atualmente|agora|hoje|ontem|recentemente|preço|precos|preços|cotação|cotacao|cotação|quem ganhou|resultado)\b/.test(text);
+  if (!text.trim()) return false;
+
+  // Pedidos explícitos de pesquisa sempre usam a web.
+  if (/\\b(pesquise|pesquisa|pesquisar|procure|procurar|busque|buscar|internet|web|site|sites|fonte|fontes)\\b/.test(text)) {
+    return true;
+  }
+
+  // Fatos que mudam com o tempo: preço, notícias, resultados, clima,
+  // lançamentos, disponibilidade, agenda, cotação e informações recentes.
+  if (/\\b(agora|hoje|ontem|amanha|amanha|atual|atualmente|recentemente|ultima|ultimo|ultimas|ultimos|recente|noticia|noticias|preco|precos|cotacao|resultado|placar|jogo|partida|clima|tempo|previsao|lancamento|lancamentos|disponivel|disponibilidade|agenda|horario|horarios|valor|salario|acoes|dolar|euro)\\b/.test(text)) {
+    return true;
+  }
+
+  // Perguntas sobre entidades ou fatos externos que a NEXA não deve
+  // depender apenas do conhecimento estático do modelo.
+  if (/\\b(quem e|quem foi|o que e|o que foi|onde fica|quando foi|quando e|qual e|qual foi|quantos|quanto custa|quanto vale|como esta|como esta|por que|porque)\\b/.test(text)) {
+    if (/\\b(essa|esse|isso|aquilo|ela|ele|meu|minha|meus|minhas|voce|voce acha|devo|deveria|posso|consigo)\\b/.test(text) && text.length < 90) {
+      // Referências curtas podem ser resolvidas pelo histórico sem consulta.
+      // Exceções com sinais claros de informação externa continuam pesquisando.
+      if (!/\\b(hoje|agora|atual|preco|noticia|resultado|quem e|onde fica|quando foi)\\b/.test(text)) {
+        return false;
+      }
+    }
+
+    // Não desperdice pesquisa em matemática, código ou comandos locais.
+    if (/\\b(codigo|javascript|html|css|python|sql|api|github|cloudflare|bug|erro|script|programa|programar)\\b/.test(text)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // Nomes próprios, organizações, produtos, lugares e tecnologias
+  // desconhecidos pelo contexto normalmente justificam consulta global.
+  if (/\\b(presidente|governador|prefeito|empresa|marca|produto|celular|computador|filme|serie|jogo|jogador|artista|musica|banda|livro|autor|cientista|universidade|cidade|pais|estado|tecnologia|software|aplicativo|app|modelo|processador|placa|carro|aviao)\\b/.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 function getThinkingConfig(mode) {
