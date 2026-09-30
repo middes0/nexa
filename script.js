@@ -463,12 +463,24 @@ async function speakWithElevenLabs(text) {
 
     elevenLabsAudio.onended = function() {
       URL.revokeObjectURL(url);
-      scheduleWakeRestart();
+      elevenLabsAudio = null;
+
+      if (window.NEXAVoiceMode?.isActive?.()) {
+        window.NEXAVoiceMode.resumeListening();
+      } else {
+        scheduleWakeRestart();
+      }
     };
 
     elevenLabsAudio.onerror = function() {
       URL.revokeObjectURL(url);
-      scheduleWakeRestart();
+      elevenLabsAudio = null;
+
+      if (window.NEXAVoiceMode?.isActive?.()) {
+        window.NEXAVoiceMode.resumeListening();
+      } else {
+        scheduleWakeRestart();
+      }
     };
 
     await elevenLabsAudio.play();
@@ -564,6 +576,10 @@ function updateSpeechButton() {
 function speakNexa(text) {
   if (!speechEnabled || !text) return;
 
+  if (window.NEXAVoiceMode?.isActive?.()) {
+    window.NEXAVoiceMode.setSpeaking();
+  }
+
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -587,6 +603,13 @@ function speakNexa(text) {
         utterance.rate = 1.02;
         utterance.pitch = 1;
         utterance.volume = 1;
+        utterance.onend = function() {
+          if (window.NEXAVoiceMode?.isActive?.()) {
+            window.NEXAVoiceMode.resumeListening();
+          } else {
+            scheduleWakeRestart();
+          }
+        };
         window.speechSynthesis.speak(utterance);
       }
     });
@@ -599,6 +622,13 @@ function speakNexa(text) {
     utterance.rate = 1.02;
     utterance.pitch = 1;
     utterance.volume = 1;
+    utterance.onend = function() {
+      if (window.NEXAVoiceMode?.isActive?.()) {
+        window.NEXAVoiceMode.resumeListening();
+      } else {
+        scheduleWakeRestart();
+      }
+    };
     window.speechSynthesis.speak(utterance);
   }
 }
@@ -2453,4 +2483,259 @@ restoreSavedNexaVoice();
   });
 
   window.addEventListener("nexa:automation-changed", renderAutomationCenter);
+})();
+
+
+/* =========================
+   MODO DE VOZ CONTÍNUO
+========================= */
+
+(function initNexaVoiceMode() {
+  const button = document.getElementById("voiceModeButton");
+  const panel = document.getElementById("voiceMode");
+  const overlay = document.getElementById("voiceModeOverlay");
+  const close = document.getElementById("voiceModeClose");
+  const mic = document.getElementById("voiceModeMic");
+  const state = document.getElementById("voiceModeState");
+  const caption = document.getElementById("voiceModeCaption");
+
+  if (!button || !panel || !mic) return;
+
+  let recognition = null;
+  let recognitionActive = false;
+  let voiceModeActive = false;
+  let waitingForReply = false;
+  let selectedVoiceModeText = "";
+
+  function setState(mode, title, detail) {
+    panel.classList.remove("listening", "thinking", "speaking");
+    if (mode) panel.classList.add(mode);
+
+    if (state) state.textContent = title;
+    if (caption) caption.textContent = detail;
+
+    mic.textContent =
+      mode === "listening" ? "◉" :
+      mode === "speaking" ? "◌" :
+      "◉";
+  }
+
+  function getRecognitionConstructor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition;
+  }
+
+  function stopRecognition() {
+    if (!recognition) return;
+    try { recognition.stop(); } catch {}
+    recognitionActive = false;
+  }
+
+  function startRecognition() {
+    const SpeechRecognition = getRecognitionConstructor();
+
+    if (!SpeechRecognition) {
+      setState(
+        "",
+        "Reconhecimento indisponível",
+        "Seu navegador não disponibilizou reconhecimento de voz."
+      );
+      return false;
+    }
+
+    if (!voiceModeActive || recognitionActive || waitingForReply) return false;
+
+    if (wakeRecognition && wakeListening) {
+      try { wakeRecognition.stop(); } catch {}
+      wakeListening = false;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = "pt-BR";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = function() {
+      recognitionActive = true;
+      setState(
+        "listening",
+        "Ouvindo...",
+        "Fale normalmente. A NEXA vai responder quando você terminar."
+      );
+    };
+
+    recognition.onresult = function(event) {
+      let transcript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      selectedVoiceModeText = transcript.trim();
+      if (caption && selectedVoiceModeText) {
+        caption.textContent = selectedVoiceModeText;
+      }
+
+      const last = event.results[event.results.length - 1];
+      if (last?.isFinal && selectedVoiceModeText) {
+        stopRecognition();
+        waitingForReply = true;
+        setState(
+          "thinking",
+          "Pensando...",
+          "A NEXA está processando sua fala."
+        );
+
+        input.value = selectedVoiceModeText;
+        selectedVoiceModeText = "";
+        composer.requestSubmit();
+      }
+    };
+
+    recognition.onerror = function(event) {
+      recognitionActive = false;
+
+      if (!voiceModeActive) return;
+
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setState(
+          "",
+          "Microfone bloqueado",
+          "Permita o microfone no navegador para usar o modo de voz."
+        );
+        return;
+      }
+
+      setState(
+        "",
+        "Não entendi",
+        "Toque no microfone e tente falar novamente."
+      );
+    };
+
+    recognition.onend = function() {
+      recognitionActive = false;
+
+      if (
+        voiceModeActive &&
+        !waitingForReply &&
+        panel.classList.contains("listening")
+      ) {
+        setState(
+          "",
+          "Pronta para ouvir",
+          "Toque no microfone e fale com a NEXA."
+        );
+      }
+    };
+
+    try {
+      recognition.start();
+      return true;
+    } catch (error) {
+      recognitionActive = false;
+      setState("", "Microfone indisponível", "Tente novamente.");
+      return false;
+    }
+  }
+
+  function openVoiceMode() {
+    voiceModeActive = true;
+    waitingForReply = false;
+    selectedVoiceModeText = "";
+
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    overlay?.classList.add("open");
+
+    stopNexaSpeech();
+
+    setState(
+      "",
+      "Modo de voz",
+      "Toque no microfone e fale com a NEXA."
+    );
+  }
+
+  function closeVoiceMode() {
+    voiceModeActive = false;
+    waitingForReply = false;
+    selectedVoiceModeText = "";
+
+    stopRecognition();
+    stopNexaSpeech();
+
+    panel.classList.remove("open", "listening", "thinking", "speaking");
+    panel.setAttribute("aria-hidden", "true");
+    overlay?.classList.remove("open");
+
+    scheduleWakeRestart();
+  }
+
+  function toggleListening() {
+    if (!voiceModeActive) return;
+
+    if (recognitionActive) {
+      stopRecognition();
+      setState(
+        "",
+        "Pausado",
+        "Toque no microfone quando quiser falar."
+      );
+      return;
+    }
+
+    if (waitingForReply) return;
+
+    startRecognition();
+  }
+
+  function resumeVoiceListening() {
+    if (!voiceModeActive) return;
+
+    waitingForReply = false;
+    setState(
+      "",
+      "Pronta para ouvir",
+      "Toque no microfone e fale com a NEXA."
+    );
+  }
+
+  window.NEXAVoiceMode = {
+    open: openVoiceMode,
+    close: closeVoiceMode,
+    resumeListening: resumeVoiceListening,
+    isActive: function() {
+      return voiceModeActive;
+    },
+    setThinking: function() {
+      if (voiceModeActive) {
+        waitingForReply = true;
+        setState("thinking", "Pensando...", "A NEXA está processando.");
+      }
+    },
+    setSpeaking: function() {
+      if (voiceModeActive) {
+        waitingForReply = true;
+        setState("speaking", "NEXA falando...", "Você pode ouvir a resposta.");
+      }
+    }
+  };
+
+  button.addEventListener("click", openVoiceMode);
+  close?.addEventListener("click", closeVoiceMode);
+  overlay?.addEventListener("click", closeVoiceMode);
+  mic.addEventListener("click", toggleListening);
+
+  document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape" && voiceModeActive) {
+      closeVoiceMode();
+    }
+  });
+
+  setState(
+    "",
+    "Modo de voz",
+    "Toque no microfone e fale com a NEXA."
+  );
 })();
