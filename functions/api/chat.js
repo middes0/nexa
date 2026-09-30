@@ -37,7 +37,6 @@ const CORS_HEADERS = {
 };
 
 const THINKING_LEVELS = {
-  none: "minimal",
   low: "low",
   medium: "medium",
   high: "high",
@@ -205,7 +204,9 @@ function buildContents(messages, memories) {
 }
 
 function getThinkingConfig(mode) {
-  const level = THINKING_LEVELS[mode] || THINKING_LEVELS.medium;
+  const level = THINKING_LEVELS[mode];
+
+  if (!level) return null;
 
   return {
     thinkingLevel: level
@@ -222,8 +223,10 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode) {
           : 512
   };
 
-  if (model === PRIMARY_MODEL) {
-    generationConfig.thinkingConfig = getThinkingConfig(mode);
+  const thinkingConfig = getThinkingConfig(mode);
+
+  if (model === PRIMARY_MODEL && thinkingConfig) {
+    generationConfig.thinkingConfig = thinkingConfig;
   }
 
   return fetch(
@@ -450,9 +453,14 @@ async function createFallbackResponse(
         ? 1024
         : mode === "high"
           ? 768
-          : 512,
-    thinkingConfig: getThinkingConfig(mode)
+          : 512
   };
+
+  const thinkingConfig = getThinkingConfig(mode);
+
+  if (thinkingConfig) {
+    generationConfig.thinkingConfig = thinkingConfig;
+  }
 
   const response = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/" +
@@ -681,16 +689,6 @@ export async function onRequestPost(context) {
       try {
         controller.abort();
       } catch (error) {}
-
-      if (!env.GEMMA_4_31B) {
-        return jsonResponse(
-          {
-            error:
-              "A NEXA não conseguiu responder com o Gemini. Configure GEMMA_4_31B para ativar o fallback."
-          },
-          503
-        );
-      }
 
       try {
         const response = await createModelRequest(
