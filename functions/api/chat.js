@@ -50,6 +50,106 @@ const THINKING_LEVELS = {
   maximum: "high"
 };
 
+async function getElevenVoices(apiKey) {
+  if (!apiKey) throw new Error("ELEVENLABS_API_KEY não configurada no Cloudflare.");
+
+  const response = await fetch(
+    "https://api.elevenlabs.io/v2/voices?language=pt&limit=100",
+    {
+      headers: {
+        "Accept": "application/json",
+        "xi-api-key": apiKey
+      }
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      "ElevenLabs vozes HTTP " + response.status + ": " + errorText
+    );
+  }
+
+  const data = await response.json();
+
+  return (data?.voices || []).map(function(voice) {
+    return {
+      id: voice.voice_id,
+      name: voice.name || "Voz sem nome",
+      category: voice.category || "",
+      description: voice.description || "",
+      labels: voice.labels || {},
+      previewUrl: voice.preview_url || null,
+      verifiedLanguages: voice.verified_languages || []
+    };
+  });
+}
+
+async function createElevenSpeechResponse(apiKey, voiceId, text) {
+  if (!apiKey) {
+    return jsonResponse(
+      { error: "ELEVENLABS_API_KEY não configurada no Cloudflare." },
+      500
+    );
+  }
+
+  if (!voiceId || !text) {
+    return jsonResponse(
+      { error: "Voz ou texto não informado." },
+      400
+    );
+  }
+
+  const safeText = String(text).trim().slice(0, 5000);
+
+  const response = await fetch(
+    "https://api.elevenlabs.io/v1/text-to-speech/" +
+      encodeURIComponent(voiceId) +
+      "?output_format=mp3_44100_128",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+        "xi-api-key": apiKey
+      },
+      body: JSON.stringify({
+        text: safeText,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.55,
+          similarity_boost: 0.8,
+          style: 0.25,
+          use_speaker_boost: true
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return jsonResponse(
+      {
+        error:
+          "ElevenLabs TTS HTTP " +
+          response.status +
+          ": " +
+          errorText
+      },
+      response.status
+    );
+  }
+
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "no-store",
+      ...CORS_HEADERS
+    }
+  });
+}
+
 function jsonResponse(data, status) {
   return new Response(JSON.stringify(data), {
     status: status || 200,
@@ -1202,6 +1302,37 @@ export async function onRequestPost(context) {
   const env = context.env;
 
   try {
+    const body = await request.json();
+
+    const apiAction =
+      typeof body?.action === "string"
+        ? body.action
+        : "";
+
+    if (apiAction === "elevenlabs_voices") {
+      try {
+        const voices = await getElevenVoices(env.ELEVENLABS_API_KEY);
+        return jsonResponse({ voices });
+      } catch (error) {
+        return jsonResponse(
+          {
+            error:
+              error?.message ||
+              "Não consegui carregar as vozes da ElevenLabs."
+          },
+          503
+        );
+      }
+    }
+
+    if (apiAction === "elevenlabs_tts") {
+      return createElevenSpeechResponse(
+        env.ELEVENLABS_API_KEY,
+        typeof body?.voiceId === "string" ? body.voiceId.trim() : "",
+        typeof body?.text === "string" ? body.text : ""
+      );
+    }
+
     if (!env.GROQ_API_KEY) {
       return jsonResponse(
         {
@@ -1210,8 +1341,6 @@ export async function onRequestPost(context) {
         500
       );
     }
-
-    const body = await request.json();
 
     const rawUserId =
       typeof body?.userId === "string"
