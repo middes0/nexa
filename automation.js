@@ -419,6 +419,102 @@ function listNexaReminders() {
     .sort((a, b) => Number(a.triggerAt) - Number(b.triggerAt));
 }
 
+async function cancelNexaReminderById(id) {
+  const items = loadNexaAutomations();
+  const candidate = items.find(item => item.id === id);
+
+  if (!candidate) {
+    return { handled: true, reply: "Não achei esse lembrete." };
+  }
+
+  const notifications = window.Capacitor?.Plugins?.LocalNotifications;
+
+  if (notifications) {
+    try {
+      await notifications.cancel({
+        notifications: [{ id: getNativeNotificationId(candidate.id) }]
+      });
+    } catch {}
+  }
+
+  saveNexaAutomations(items.filter(item => item.id !== id));
+  window.dispatchEvent(new CustomEvent("nexa:automation-changed"));
+
+  return {
+    handled: true,
+    reply: "Lembrete excluído: " + candidate.text
+  };
+}
+
+async function pauseNexaReminder(id) {
+  const items = loadNexaAutomations();
+  const candidate = items.find(item => item.id === id);
+
+  if (!candidate) return false;
+
+  const remainingMs = Math.max(
+    1000,
+    Number(candidate.triggerAt) - Date.now()
+  );
+
+  const notifications = window.Capacitor?.Plugins?.LocalNotifications;
+
+  if (notifications) {
+    try {
+      await notifications.cancel({
+        notifications: [{ id: getNativeNotificationId(candidate.id) }]
+      });
+    } catch {}
+  }
+
+  candidate.status = "paused";
+  candidate.remainingMs = remainingMs;
+  candidate.pausedAt = Date.now();
+
+  saveNexaAutomations(items);
+  window.dispatchEvent(new CustomEvent("nexa:automation-changed"));
+  return true;
+}
+
+async function resumeNexaReminder(id) {
+  const items = loadNexaAutomations();
+  const candidate = items.find(item => item.id === id);
+
+  if (!candidate) return false;
+
+  if (candidate.status !== "paused") return true;
+
+  if (candidate.recurrence) {
+    candidate.triggerAt = getNextRecurrence({
+      ...candidate,
+      triggerAt: Date.now()
+    });
+  } else {
+    candidate.triggerAt = Date.now() + Math.max(
+      1000,
+      Number(candidate.remainingMs) || 60000
+    );
+  }
+
+  candidate.status = "scheduled";
+  delete candidate.remainingMs;
+  delete candidate.pausedAt;
+
+  saveNexaAutomations(items);
+
+  const nativeScheduled = await scheduleNativeReminder(candidate);
+
+  if (!nativeScheduled) {
+    if ("Notification" in window && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch {}
+    }
+    scheduleWebReminder(candidate);
+  }
+
+  window.dispatchEvent(new CustomEvent("nexa:automation-changed"));
+  return true;
+}
+
 async function handleNexaAutomation(text) {
   const normalized = normalizeNexaText(text);
 
@@ -511,6 +607,9 @@ window.NEXAAutomation = {
   handle: handleNexaAutomation,
   list: listNexaReminders,
   cancel: cancelNexaReminder,
+  cancelById: cancelNexaReminderById,
+  pause: pauseNexaReminder,
+  resume: resumeNexaReminder,
   restore: restoreNexaReminders,
   routines: loadNexaRoutines
 };
