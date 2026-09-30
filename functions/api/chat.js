@@ -1640,9 +1640,15 @@ export async function onRequestPost(context) {
 
     const controller = new AbortController();
 
+    // A foto persistente precisa ser enviada para um modelo multimodal.
+    // Os modelos gpt-oss rejeitam content como array e causam HTTP 400.
+    const requestModel = imageContext
+      ? "qwen/qwen3.8-27b"
+      : PRIMARY_MODEL;
+
     try {
       const response = await createModelRequest(
-        PRIMARY_MODEL,
+        requestModel,
         env.GROQ_API_KEY,
         messages,
         memories,
@@ -1654,7 +1660,7 @@ export async function onRequestPost(context) {
 
       const result = await waitForFirstText(
         response,
-        PRIMARY_MODEL
+        requestModel
       );
 
       return createClientStream(
@@ -1667,12 +1673,24 @@ export async function onRequestPost(context) {
         userId,
         userMessage,
         context,
-        PRIMARY_MODEL
+        requestModel
       );
-    } catch (geminiError) {
+    } catch (modelError) {
       try {
         controller.abort();
       } catch (error) {}
+
+      // Não faça fallback para gpt-oss quando há imagem.
+      if (imageContext) {
+        return jsonResponse(
+          {
+            error:
+              "Não consegui continuar a análise da imagem. " +
+              (modelError?.message || "Erro desconhecido.")
+          },
+          503
+        );
+      }
 
       try {
         const response = await createModelRequest(
@@ -1683,7 +1701,7 @@ export async function onRequestPost(context) {
           null,
           mode,
           shouldUseWebSearch(userMessage),
-          imageContext
+          ""
         );
 
         const result = await waitForFirstText(
@@ -1703,14 +1721,14 @@ export async function onRequestPost(context) {
           context,
           FALLBACK_MODEL
         );
-      } catch (gemmaError) {
+      } catch (fallbackError) {
         return jsonResponse(
           {
             error:
-              "Gemini: " +
-              (geminiError?.message || "erro desconhecido") +
+              "NEXA: " +
+              (modelError?.message || "erro desconhecido") +
               " | Fallback: " +
-              (gemmaError?.message || "erro desconhecido")
+              (fallbackError?.message || "erro desconhecido")
           },
           503
         );
