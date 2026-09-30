@@ -734,6 +734,189 @@ function createCalculatorResponse(toolResult) {
   });
 }
 
+function extractWebSources(data) {
+  const sources = [];
+  const executedTools = data?.choices?.[0]?.message?.executed_tools;
+
+  function visit(value) {
+    if (!value) return;
+
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    if (typeof value !== "object") return;
+
+    if (
+      typeof value.url === "string" &&
+      /^https?:\/\//i.test(value.url)
+    ) {
+      sources.push({
+        title:
+          typeof value.title === "string" && value.title.trim()
+            ? value.title.trim()
+            : value.url,
+        url: value.url
+      });
+    }
+
+    Object.keys(value).forEach(function(key) {
+      if (
+        key === "search_results" ||
+        key === "results" ||
+        key === "executed_tools"
+      ) {
+        visit(value[key]);
+      }
+    });
+  }
+
+  visit(executedTools);
+
+  return sources
+    .filter(function(source, index, array) {
+      return array.findIndex(function(item) {
+        return item.url === source.url;
+      }) === index;
+    })
+    .slice(0, 8);
+}
+
+async function createWebSearchResponse(
+  apiKey,
+  messages,
+  memories,
+  mode
+) {
+  const input = [];
+
+  input.push({
+    role: "system",
+    content: SYSTEM_PROMPT
+  });
+
+  if (memories.length) {
+    input.push({
+      role: "system",
+      content:
+        "Memórias relevantes sobre o usuário:\n" +
+        memories.map(function(memory) {
+          return "- " + memory;
+        }).join("\n")
+    });
+  }
+
+  for (const message of messages) {
+    input.push({
+      role:
+        message.role === "assistant"
+          ? "assistant"
+          : "user",
+      content: message.content
+    });
+  }
+
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model:
+          mode === "maximum" || mode === "high"
+            ? FALLBACK_MODEL
+            : PRIMARY_MODEL,
+        messages: input,
+        max_completion_tokens:
+          mode === "maximum"
+            ? 1024
+            : mode === "high"
+              ? 768
+              : 512,
+        temperature: 0.2,
+        stream: false,
+        tool_choice: "required",
+        tools: [
+          {
+            type: "browser_search"
+          }
+        ]
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      "Pesquisa web HTTP " +
+      response.status +
+      ": " +
+      errorText
+    );
+  }
+
+  const data = await response.json();
+  const text =
+    data?.choices?.[0]?.message?.content?.trim() || "";
+
+  if (!text) {
+    throw new Error(
+      "A pesquisa web não retornou texto."
+    );
+  }
+
+  return {
+    text,
+    sources: extractWebSources(data)
+  };
+}
+
+function createWebSearchStream(result) {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          "data: " +
+          JSON.stringify({
+            type: "text",
+            text: result.text
+          }) +
+          "\n\n"
+        )
+      );
+
+      controller.enqueue(
+        encoder.encode(
+          "data: " +
+          JSON.stringify({
+            type: "done",
+            model: "nexa-web-search",
+            sources: result.sources
+          }) +
+          "\n\n"
+        )
+      );
+
+      controller.close();
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      ...CORS_HEADERS
+    }
+  });
+}
+
 
 export async function onRequestOptions() {
   return new Response(null, {
@@ -846,6 +1029,39 @@ export async function onRequestPost(context) {
     }
 
     const memories = await getMemories(env, userId);
+
+    if (shouldUseWebSearch(userMessage)) {
+      try {
+        const webResult = await createWebSearchResponse(
+          env.GROQ_API_KEY,
+          messages,
+          memories,
+          mode
+        );
+
+        if (context?.waitUntil) {
+          context.waitUntil(
+            extractMemory(
+              env,
+              userId,
+              userMessage,
+              webResult.text
+            )
+          );
+        }
+
+        return createWebSearchStream(webResult);
+      } catch (webError) {
+        return jsonResponse(
+          {
+            error:
+              "Não consegui realizar a pesquisa na web agora. " +
+              (webError?.message || "Erro desconhecido.")
+          },
+          503
+        );
+      }
+    }
 
     const controller = new AbortController();
 
