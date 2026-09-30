@@ -17,12 +17,20 @@ const clearMemoriesButton = document.getElementById("clearMemoriesButton");
 const memoryOverlay = document.getElementById("memoryOverlay");
 const modeButton = document.getElementById("modeButton");
 const modeMenu = document.getElementById("modeMenu");
+const voiceButton = document.getElementById("voiceButton");
+const voicePanel = document.getElementById("voicePanel");
+const voiceList = document.getElementById("voiceList");
+const voiceTestButton = document.getElementById("voiceTestButton");
+const voiceSaveButton = document.getElementById("voiceSaveButton");
+const voiceCloseButton = document.getElementById("voiceCloseButton");
+const voiceOverlay = document.getElementById("voiceOverlay");
 
 const MEMORY_KEY = "nexa_conversation";
 const CONVERSATIONS_KEY = "nexa_conversations";
 const ACTIVE_CONVERSATION_KEY = "nexa_active_conversation";
 const USER_ID_KEY = "nexa_user_id";
 const MODE_KEY = "nexa_response_mode";
+const VOICE_KEY = "nexa_voice_name";
 const API_URL = "https://nexa-2.pages.dev/api/chat";
 
 const MODE_INFO = {
@@ -109,26 +117,81 @@ updateModeUI();
 
 let speechEnabled = true;
 let selectedVoice = null;
+let availableVoices = [];
 
 function loadNexaVoice() {
   if (!("speechSynthesis" in window)) return;
-
-  const voices = window.speechSynthesis.getVoices();
-
-  if (!voices.length) return;
-
+  availableVoices = window.speechSynthesis.getVoices();
+  if (!availableVoices.length) return;
+  const savedName = localStorage.getItem(VOICE_KEY);
   selectedVoice =
-    voices.find(
-      voice =>
-        voice.lang &&
-        voice.lang.toLowerCase() === "pt-br"
-    ) ||
-    voices.find(
-      voice =>
-        voice.lang &&
-        voice.lang.toLowerCase().startsWith("pt")
-    ) ||
+    availableVoices.find(v => v.name === savedName) ||
+    availableVoices.find(v => v.lang && v.lang.toLowerCase() === "pt-br") ||
+    availableVoices.find(v => v.lang && v.lang.toLowerCase().startsWith("pt")) ||
+    availableVoices[0] ||
     null;
+  renderVoiceList();
+}
+
+function renderVoiceList() {
+  if (!voiceList) return;
+  voiceList.innerHTML = "";
+  const voices = availableVoices.slice().sort(function(x, y) {
+    const xp = x.lang && x.lang.toLowerCase().startsWith("pt");
+    const yp = y.lang && y.lang.toLowerCase().startsWith("pt");
+    return Number(yp) - Number(xp) || x.name.localeCompare(y.name);
+  });
+  if (!voices.length) {
+    voiceList.innerHTML = '<div class="voice-empty">Nenhuma voz disponível neste navegador.</div>';
+    return;
+  }
+  voices.forEach(function(voice) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "voice-option" + (selectedVoice && selectedVoice.name === voice.name ? " active" : "");
+    const name = document.createElement("strong");
+    name.textContent = voice.name;
+    const lang = document.createElement("span");
+    lang.textContent = voice.lang || "";
+    option.appendChild(name);
+    option.appendChild(lang);
+    option.addEventListener("click", function() {
+      selectedVoice = voice;
+      renderVoiceList();
+    });
+    voiceList.appendChild(option);
+  });
+}
+
+function testNexaVoice() {
+  if (!selectedVoice || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance("Oi. Essa é a minha nova voz. Se você gostou, pode salvar.");
+  utterance.lang = selectedVoice.lang || "pt-BR";
+  utterance.voice = selectedVoice;
+  utterance.rate = 1.02;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function saveNexaVoice() {
+  if (!selectedVoice) return;
+  localStorage.setItem(VOICE_KEY, selectedVoice.name);
+  closeVoicePanel();
+}
+
+function openVoicePanel() {
+  if (!voicePanel) return;
+  loadNexaVoice();
+  voicePanel.classList.add("open");
+  voiceOverlay.classList.add("open");
+}
+
+function closeVoicePanel() {
+  if (!voicePanel) return;
+  voicePanel.classList.remove("open");
+  voiceOverlay.classList.remove("open");
 }
 
 function speakNexa(text) {
@@ -172,6 +235,12 @@ if ("speechSynthesis" in window) {
   loadNexaVoice();
   window.speechSynthesis.onvoiceschanged = loadNexaVoice;
 }
+
+if (voiceButton) voiceButton.addEventListener("click", openVoicePanel);
+if (voiceCloseButton) voiceCloseButton.addEventListener("click", closeVoicePanel);
+if (voiceOverlay) voiceOverlay.addEventListener("click", closeVoicePanel);
+if (voiceTestButton) voiceTestButton.addEventListener("click", testNexaVoice);
+if (voiceSaveButton) voiceSaveButton.addEventListener("click", saveNexaVoice);
 
 /* =========================
    PALAVRA DE ATIVAÇÃO — "NEXA"
