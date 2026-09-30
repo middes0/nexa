@@ -759,7 +759,8 @@ async function createFallbackResponse(
           "no-cache, no-transform",
 
         "Connection":
-          "keep-alive"
+          "keep-alive",
+        ...CORS_HEADERS
       }
     }
   );
@@ -795,52 +796,50 @@ export async function onRequestPost(
       );
     }
 
-    if (!env.GEMINI_API_KEY) {
-      return jsonResponse(
-        {
-          error:
-            "GEMINI_API_KEY não configurada no Cloudflare."
-        },
-        500
-      );
-    }
-
 
     const body =
       await request.json();
 
+    const rawUserId =
+      typeof body?.userId === "string"
+        ? body.userId.trim()
+        : "";
+
     const userId =
-      String(
-        body?.userId || ""
-      );
-
-
-    let incomingMessages = [];
-
-
-    if (
-      Array.isArray(
-        body?.messages
-      )
-    ) {
-      incomingMessages =
-        body.messages;
-
-    } else if (
-      Array.isArray(
-        body?.history
-      )
-    ) {
-      incomingMessages =
-        body.history;
-    }
-
+      rawUserId.slice(0, 100);
 
     const directMessage =
       typeof body?.message === "string"
-        ? body.message.trim()
+        ? body.message.trim().slice(0, 4000)
         : "";
 
+    let incomingMessages = [];
+
+    if (Array.isArray(body?.messages)) {
+      incomingMessages = body.messages;
+    } else if (Array.isArray(body?.history)) {
+      incomingMessages = body.history;
+    }
+
+    incomingMessages = incomingMessages
+      .slice(-12)
+      .map(function(message) {
+        return {
+          role:
+            message?.role === "assistant"
+              ? "assistant"
+              : message?.role === "model"
+                ? "model"
+                : "user",
+          content:
+            String(message?.content || "")
+              .trim()
+              .slice(0, 4000)
+        };
+      })
+      .filter(function(message) {
+        return message.content;
+      });
 
     if (
       directMessage &&
@@ -880,25 +879,7 @@ export async function onRequestPost(
 
     const messages =
       incomingMessages
-        .slice(-4)
-        .map(function(message) {
-          return {
-            role:
-              message?.role === "assistant"
-                ? "assistant"
-                : message?.role === "model"
-                  ? "model"
-                  : "user",
-
-            content:
-              String(
-                message?.content || ""
-              ).trim()
-          };
-        })
-        .filter(function(message) {
-          return message.content;
-        });
+        .slice(-4);
 
 
     if (!messages.length) {
@@ -967,6 +948,16 @@ export async function onRequestPost(
       /* =========================
          GEMINI — FALLBACK
       ========================= */
+
+      if (!env.GEMINI_API_KEY) {
+        return jsonResponse(
+          {
+            error:
+              "A NEXA não conseguiu responder com o modelo principal. Configure GEMINI_API_KEY para ativar o fallback."
+          },
+          503
+        );
+      }
 
       try {
 
