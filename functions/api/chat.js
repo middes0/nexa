@@ -328,10 +328,69 @@ function shouldForgetMemory(message) {
   return /\b(esquece|esquecer|apaga|apague|remove|remova)\b.*\b(memória|memoria|isso|essa|aquilo)\b/i.test(message || "");
 }
 
+function selectContextualMemories(memories, messages) {
+  if (!Array.isArray(memories) || !memories.length) return [];
+
+  const recentText = (messages || [])
+    .slice(-4)
+    .map(function(message) {
+      return message && message.content ? String(message.content) : "";
+    })
+    .join(" ")
+    .toLowerCase();
+
+  const stopWords = new Set([
+    "a","o","as","os","um","uma","uns","umas","de","da","do","das","dos",
+    "e","ou","em","no","na","nos","nas","para","por","com","que","se",
+    "eu","você","voce","meu","minha","meus","minhas","isso","essa","esse",
+    "aquela","aquele","aquilo","como","qual","quem","onde","quando","porque"
+  ]);
+
+  const terms = recentText
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .match(/[a-z0-9]{4,}/g) || [];
+
+  const relevantTerms = new Set(
+    terms.filter(function(term) {
+      return !stopWords.has(term);
+    })
+  );
+
+  if (!relevantTerms.size) return memories.slice(0, 5);
+
+  return memories
+    .map(function(memory, index) {
+      const normalized = String(memory)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      const memoryTerms = normalized.match(/[a-z0-9]{4,}/g) || [];
+      let score = 0;
+
+      memoryTerms.forEach(function(term) {
+        if (relevantTerms.has(term)) score++;
+      });
+
+      return { memory: memory, score: score, index: index };
+    })
+    .filter(function(item) {
+      return item.score > 0;
+    })
+    .sort(function(a, b) {
+      return b.score - a.score || a.index - b.index;
+    })
+    .slice(0, 8)
+    .map(function(item) {
+      return item.memory;
+    });
+}
+
 function buildContents(messages, memories) {
   const contents = [];
+  const contextualMemories = selectContextualMemories(memories, messages);
 
-  if (memories.length) {
+  if (contextualMemories.length) {
     contents.push({
       role: "user",
       parts: [{
@@ -618,7 +677,7 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode, use
       role: "system",
       content:
         "Memórias do usuário para contexto. Use somente quando forem relevantes; não mencione a lista sem necessidade. Priorize o que o usuário acabou de dizer.\n" +
-        memories.map(function(memory) {
+        contextualMemories.map(function(memory) {
           return "- " + memory;
         }).join("\n")
     });
@@ -971,7 +1030,7 @@ async function createWebSearchResponse(
       role: "system",
       content:
         "Memórias do usuário para contexto. Use somente quando forem relevantes; não mencione a lista sem necessidade. Priorize o que o usuário acabou de dizer.\n" +
-        memories.map(function(memory) {
+        contextualMemories.map(function(memory) {
           return "- " + memory;
         }).join("\n")
     });
