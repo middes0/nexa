@@ -30,12 +30,15 @@ const SYSTEM_PROMPT = [
 ].join("\n");
 
 
+const CORS_HEADERS = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"};
+
 function jsonResponse(data, status) {
   return new Response(JSON.stringify(data), {
     status: status || 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-cache"
+      "Cache-Control": "no-cache",
+      ...CORS_HEADERS
     }
   });
 }
@@ -601,7 +604,8 @@ function createClientStream(
           "no-cache, no-transform",
 
         "Connection":
-          "keep-alive"
+          "keep-alive",
+        ...CORS_HEADERS
       }
     }
   );
@@ -765,6 +769,10 @@ async function createFallbackResponse(
 /* =========================
    POST /api/chat
 ========================= */
+
+export async function onRequestOptions() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
 
 export async function onRequestPost(
   context
