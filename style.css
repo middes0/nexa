@@ -1260,3 +1260,89 @@ footer {
     font-size: 9px;
   }
 }
+
+/* Composer response mode */
+.composer-mode {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.mode-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: #171021;
+  color: var(--accent-light);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mode-button:hover {
+  background: #241438;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.18);
+}
+
+.mode-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 9px);
+  width: 155px;
+  padding: 7px;
+  border: 1px solid var(--line-hover);
+  border-radius: 13px;
+  background: rgba(13, 9, 19, 0.98);
+  box-shadow: 0 14px 35px rgba(0,0,0,.45), 0 0 25px rgba(76,29,149,.15);
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(5px) scale(.98);
+  transform-origin: bottom right;
+  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+  z-index: 20;
+}
+
+.mode-menu.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.mode-menu-title {
+  padding: 5px 8px 7px;
+  color: #756b81;
+  font-size: 9px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.mode-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a59aac;
+  text-align: left;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mode-menu button:hover {
+  background: #171021;
+  color: #fff;
+}
+
+.mode-menu button.active {
+  background: rgba(76,29,149,.32);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .mode-menu {
+    width: 145px;
+  }
+}
