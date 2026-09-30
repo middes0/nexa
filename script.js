@@ -919,19 +919,17 @@ function restoreConversation() {
 }
 
 loadMemory();
+loadConversations();
 
-if (!activeConversationId) {
-  const existing = conversations.find(function(item) {
-    return item.messages && item.messages.length;
+if (activeConversationId) {
+  const active = conversations.find(function(item) {
+    return item.id === activeConversationId;
   });
 
-  if (existing) {
-    activeConversationId = existing.id;
+  if (active && Array.isArray(active.messages) && active.messages.length) {
+    history.length = 0;
+    history.push(...active.messages);
   }
-}
-
-if (!activeConversationId) {
-  createConversation();
 }
 
 restoreConversation();
