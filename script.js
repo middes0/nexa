@@ -1078,6 +1078,88 @@ async function clearAllMemories() {
    MENSAGENS
 ========================= */
 
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function renderMarkdown(text) {
+  const parts = String(text || "").split("\x60\x60\x60");
+  let html = "";
+
+  parts.forEach(function(part, index) {
+    if (index % 2 === 1) {
+      const lines = part.split(/\r?\n/);
+      let language = "";
+      let code = part;
+
+      if (/^[a-zA-Z0-9_+-]+\n/.test(part)) {
+        language = lines.shift();
+        code = lines.join("\n");
+      }
+
+      html +=
+        '<div class="code-block">' +
+          '<div class="code-header">' +
+            (language ? '<span class="code-language">' + escapeHtml(language) + '</span>' : '') +
+            '<button type="button" class="code-copy" aria-label="Copiar código">Copiar</button>' +
+          '</div>' +
+          '<pre><code>' + escapeHtml(code.trim()) + '</code></pre>' +
+        '</div>';
+      return;
+    }
+
+    let formatted = escapeHtml(part);
+
+    formatted = formatted
+      .replace(/^### (.+)$/gm, "<h4>$1</h4>")
+      .replace(/^## (.+)$/gm, "<h3>$1</h3>")
+      .replace(/^# (.+)$/gm, "<h3>$1</h3>")
+      .replace(/^[-*] (.+)$/gm, "<li>$1</li>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+      .replace(/\x60([^\x60]+)\x60/g, '<code class="inline-code">$1</code>')
+      .replace(/\n/g, "<br>");
+
+    html += formatted;
+  });
+
+  return html;
+}
+
+function renderMessageContent(message, text) {
+  if (!message) return null;
+
+  const oldContent = message.querySelector(".message-content, p");
+  if (oldContent) oldContent.remove();
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+  content.innerHTML = renderMarkdown(text);
+
+  content.querySelectorAll(".code-copy").forEach(function(button) {
+    button.addEventListener("click", async function() {
+      const code = button.closest(".code-block")?.querySelector("code")?.textContent || "";
+      try {
+        await navigator.clipboard.writeText(code);
+        button.textContent = "Copiado";
+        setTimeout(function() {
+          button.textContent = "Copiar";
+        }, 1400);
+      } catch (error) {
+        button.textContent = "Falhou";
+      }
+    });
+  });
+
+  message.appendChild(content);
+  return content;
+}
+
 function addMessage(text, type) {
   const message = document.createElement("div");
   message.className = "message " + type;
@@ -1086,11 +1168,8 @@ function addMessage(text, type) {
   label.className = "label";
   label.textContent = type === "user" ? "VOCÊ" : "NEXA";
 
-  const paragraph = document.createElement("p");
-  paragraph.textContent = text;
-
   message.appendChild(label);
-  message.appendChild(paragraph);
+  renderMessageContent(message, text);
   chat.appendChild(message);
 
   message.scrollIntoView({
@@ -1185,21 +1264,146 @@ function renderWebSources(sources, message) {
   message.appendChild(box);
 }
 
-function addReplayButton(message, text) {
-  if (!message || !text || message.querySelector(".message-replay")) return;
+function addResponseActions(message, text, userText) {
+  if (!message || !text) return;
 
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "message-replay";
-  button.textContent = "🔊";
-  button.title = "Ouvir novamente";
-  button.setAttribute("aria-label", "Ouvir resposta da NEXA");
+  const oldActions = message.querySelector(".message-actions");
+  if (oldActions) oldActions.remove();
 
-  button.addEventListener("click", function() {
+  const actions = document.createElement("div");
+  actions.className = "message-actions";
+
+  const createAction = function(icon, label, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "message-action";
+    button.textContent = icon;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.addEventListener("click", handler);
+    actions.appendChild(button);
+  };
+
+  createAction("↻", "Gerar novamente", function() {
+    regenerateNexaResponse(message, userText);
+  });
+
+  createAction("🔊", "Ouvir novamente", function() {
     speakNexa(text);
   });
 
-  message.appendChild(button);
+  createAction("⧉", "Copiar resposta", async function() {
+    try {
+      await navigator.clipboard.writeText(text);
+      const button = actions.children[2];
+      button.textContent = "✓";
+      setTimeout(function() {
+        button.textContent = "⧉";
+      }, 1400);
+    } catch (error) {}
+  });
+
+  message.appendChild(actions);
+}
+
+function addReplayButton(message, text, userText) {
+  addResponseActions(message, text, userText);
+}
+
+async function regenerateNexaResponse(message, userText) {
+  if (!message || !userText || sendButton.disabled) return;
+
+  sendButton.disabled = true;
+  micButton.disabled = true;
+  newChatButton.disabled = true;
+  modeButton.disabled = true;
+
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (elevenLabsAudio) elevenLabsAudio.pause();
+
+  const modelIndex = history.map(function(item) {
+    return item.role;
+  }).lastIndexOf("model");
+
+  if (modelIndex >= 0) history.splice(modelIndex, 1);
+
+  const oldContent = message.querySelector(".message-content, p");
+  if (oldContent) oldContent.textContent = "";
+  const oldActions = message.querySelector(".message-actions");
+  if (oldActions) oldActions.remove();
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: userText,
+        history: history.slice(-12),
+        userId,
+        mode: responseMode
+      })
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error("Não consegui gerar outra resposta.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullReply = "";
+    let sources = [];
+
+    function processEvent(event) {
+      event.split(/\r?\n/).forEach(function(line) {
+        if (!line.startsWith("data:")) return;
+        const raw = line.slice(5).trim();
+        if (!raw) return;
+
+        let data;
+        try { data = JSON.parse(raw); } catch { return; }
+
+        if (data.type === "text" && typeof data.text === "string") {
+          fullReply += data.text;
+          const live = message.querySelector(".message-content, p");
+          if (live) live.textContent = fullReply;
+          chat.scrollTop = chat.scrollHeight;
+        }
+
+        if (data.type === "done") sources = data.sources || [];
+        if (data.type === "error") throw new Error(data.error || "Erro ao regenerar.");
+      });
+    }
+
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+
+      buffer += decoder.decode(result.value, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() || "";
+      events.forEach(processEvent);
+    }
+
+    if (buffer.trim()) processEvent(buffer);
+
+    if (!fullReply.trim()) throw new Error("A NEXA não retornou nenhuma resposta.");
+
+    renderMessageContent(message, fullReply);
+    renderWebSources(sources, message);
+    history.push({ role: "model", content: fullReply });
+    saveMemory();
+    addResponseActions(message, fullReply, userText);
+    speakNexa(fullReply);
+  } catch (error) {
+    addMessage("Erro ao regenerar: " + (error?.message || "erro desconhecido"), "nexa");
+  } finally {
+    sendButton.disabled = false;
+    micButton.disabled = false;
+    newChatButton.disabled = false;
+    modeButton.disabled = false;
+    input.focus();
+  }
 }
 
 function createStreamingMessage() {
@@ -1361,8 +1565,22 @@ async function askNexa(text) {
     content: fullReply
   });
 
+  renderMessageContent(streamingMessage.message, fullReply);
   saveMemory();
-  addReplayButton(streamingMessage.message, fullReply);
+
+  const previousUser = history
+    .slice(0, -1)
+    .reverse()
+    .find(function(item) {
+      return item.role === "user";
+    });
+
+  addResponseActions(
+    streamingMessage.message,
+    fullReply,
+    previousUser?.content || text
+  );
+
   speakNexa(fullReply);
 
   return {
@@ -1668,7 +1886,18 @@ function restoreConversation() {
 
     if (item.role !== "user") {
       const message = chat.lastElementChild;
-      addReplayButton(message, item.content);
+      const previousUser = history
+        .slice(0, history.indexOf(item))
+        .reverse()
+        .find(function(previous) {
+          return previous.role === "user";
+        });
+
+      addResponseActions(
+        message,
+        item.content,
+        previousUser?.content || ""
+      );
     }
   });
 }
