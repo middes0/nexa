@@ -118,89 +118,124 @@ updateModeUI();
 let speechEnabled = true;
 let selectedVoice = null;
 let availableVoices = [];
+let elevenLabsAudio = null;
+let elevenLabsRequestId = 0;
 
-function loadNexaVoice() {
-  if (!("speechSynthesis" in window)) return;
-  availableVoices = window.speechSynthesis.getVoices();
-  if (!availableVoices.length) return;
-  const savedName = localStorage.getItem(VOICE_KEY);
-  selectedVoice =
-    availableVoices.find(v => v.name === savedName) ||
-    availableVoices.find(v => v.lang && v.lang.toLowerCase() === "pt-br") ||
-    availableVoices.find(v => v.lang && v.lang.toLowerCase().startsWith("pt")) ||
-    availableVoices[0] ||
-    null;
-  renderVoiceList();
+async function loadNexaVoice() {
+  if (!voiceList) return;
+
+  const savedVoiceId = localStorage.getItem(VOICE_KEY);
+  voiceList.innerHTML = '<div class="voice-empty">Carregando vozes da NEXA...</div>';
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "elevenlabs_voices",
+        userId
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Não consegui carregar as vozes.");
+    }
+
+    availableVoices = Array.isArray(data.voices)
+      ? data.voices
+      : [];
+
+    const distinctVoices = getDistinctElevenVoices();
+
+    selectedVoice =
+      distinctVoices.find(function(voice) {
+        return voice.id === savedVoiceId;
+      }) ||
+      distinctVoices[0] ||
+      null;
+
+    renderVoiceList();
+  } catch (error) {
+    availableVoices = [];
+    selectedVoice = null;
+    voiceList.innerHTML =
+      '<div class="voice-empty">Não consegui carregar as vozes da ElevenLabs.</div>';
+    console.error("Erro ao carregar vozes da ElevenLabs:", error);
+  }
 }
 
-function getVoiceFamilyKey(voice) {
-  return String(voice.name || "")
+function getElevenVoiceFamilyKey(voice) {
+  const labels = voice && voice.labels ? voice.labels : {};
+  const baseName = String(voice?.name || "");
+
+  return (
+    baseName +
+    "|" +
+    String(labels.gender || "") +
+    "|" +
+    String(labels.age || "") +
+    "|" +
+    String(labels.accent || "")
+  )
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g, "")
-    .replace(/\\b(google|microsoft|apple|samsung|amazon|android|online|offline|natural|premium|enhanced|standard|voice|voices|portuguese|portugal|brazil|brasil|pt[-_ ]?br|pt[-_ ]?pt)\\b/g, "")
-    .replace(/\\b(pt[-_ ]?[a-z]{2}|[a-z]{2}[-_][a-z]{2})\\b/g, "")
-    .replace(/[()\\[\\]{}._,-]+/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function getDistinctPortugueseVoices() {
-  const candidates = availableVoices
-    .filter(function(voice) {
-      return voice.lang && voice.lang.toLowerCase().startsWith("pt");
-    })
-    .sort(function(a, b) {
-      const aBrazil = a.lang.toLowerCase() === "pt-br" ? 0 : 1;
-      const bBrazil = b.lang.toLowerCase() === "pt-br" ? 0 : 1;
-      if (aBrazil !== bBrazil) return aBrazil - bBrazil;
+function getDistinctElevenVoices() {
+  const seen = new Set();
+  const result = [];
 
-      const aLocal = a.localService ? 0 : 1;
-      const bLocal = b.localService ? 0 : 1;
-      if (aLocal !== bLocal) return aLocal - bLocal;
+  availableVoices.forEach(function(voice) {
+    const key = getElevenVoiceFamilyKey(voice);
 
-      return String(a.name).localeCompare(String(b.name));
-    });
+    if (!key || seen.has(key)) return;
 
-  const seenFamilies = new Set();
-  const distinct = [];
-
-  candidates.forEach(function(voice) {
-    const family = getVoiceFamilyKey(voice) || String(voice.name || "").toLowerCase();
-
-    if (seenFamilies.has(family)) return;
-
-    seenFamilies.add(family);
-    distinct.push(voice);
+    seen.add(key);
+    result.push(voice);
   });
 
-  return distinct;
+  return result;
 }
 
 function renderVoiceList() {
   if (!voiceList) return;
+
   voiceList.innerHTML = "";
 
-  const voices = getDistinctPortugueseVoices();
+  const voices = getDistinctElevenVoices();
 
   if (!voices.length) {
-    voiceList.innerHTML = '<div class="voice-empty">Nenhuma voz diferente disponível neste navegador.</div>';
+    voiceList.innerHTML =
+      '<div class="voice-empty">Nenhuma voz da ElevenLabs disponível.</div>';
     return;
   }
 
   voices.forEach(function(voice) {
     const option = document.createElement("button");
     option.type = "button";
-    option.className = "voice-option" + (selectedVoice && selectedVoice.name === voice.name ? " active" : "");
+    option.className =
+      "voice-option" +
+      (selectedVoice && selectedVoice.id === voice.id ? " active" : "");
 
     const name = document.createElement("strong");
     name.textContent = voice.name;
 
-    const lang = document.createElement("span");
-    lang.textContent = voice.lang === "pt-BR" ? "Português (Brasil)" : (voice.lang || "");
+    const meta = document.createElement("span");
+    const gender = voice.labels?.gender || "";
+    const accent = voice.labels?.accent || "";
+    meta.textContent = [gender, accent]
+      .filter(Boolean)
+      .join(" · ") || "ElevenLabs";
 
     option.appendChild(name);
-    option.appendChild(lang);
+    option.appendChild(meta);
 
     option.addEventListener("click", function() {
       selectedVoice = voice;
@@ -211,77 +246,146 @@ function renderVoiceList() {
   });
 }
 
-function testNexaVoice() {
-  if (!selectedVoice || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance("Oi. Essa é a minha nova voz. Se você gostou, pode salvar.");
-  utterance.lang = selectedVoice.lang || "pt-BR";
-  utterance.voice = selectedVoice;
-  utterance.rate = 1.02;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-  window.speechSynthesis.speak(utterance);
+async function speakWithElevenLabs(text) {
+  if (!selectedVoice || !text) return false;
+
+  const requestId = ++elevenLabsRequestId;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "elevenlabs_tts",
+        voiceId: selectedVoice.id,
+        text: text.slice(0, 5000),
+        userId
+      })
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(function() {
+        return null;
+      });
+
+      throw new Error(
+        data?.error || "Erro ao gerar áudio da ElevenLabs."
+      );
+    }
+
+    const blob = await response.blob();
+
+    if (requestId !== elevenLabsRequestId) return false;
+
+    if (elevenLabsAudio) {
+      elevenLabsAudio.pause();
+      URL.revokeObjectURL(elevenLabsAudio.src);
+    }
+
+    const url = URL.createObjectURL(blob);
+    elevenLabsAudio = new Audio(url);
+    elevenLabsAudio.volume = 1;
+
+    elevenLabsAudio.onended = function() {
+      URL.revokeObjectURL(url);
+      scheduleWakeRestart();
+    };
+
+    elevenLabsAudio.onerror = function() {
+      URL.revokeObjectURL(url);
+      scheduleWakeRestart();
+    };
+
+    await elevenLabsAudio.play();
+    return true;
+  } catch (error) {
+    console.error("Erro no TTS da ElevenLabs:", error);
+    return false;
+  }
+}
+
+async function testNexaVoice() {
+  if (!selectedVoice) return;
+
+  const text =
+    "Oi. Essa é a minha voz. Agora a NEXA pode falar com uma voz de verdade.";
+
+  const success = await speakWithElevenLabs(text);
+
+  if (!success && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pt-BR";
+    window.speechSynthesis.speak(utterance);
+  }
 }
 
 function saveNexaVoice() {
   if (!selectedVoice) return;
-  localStorage.setItem(VOICE_KEY, selectedVoice.name);
+
+  localStorage.setItem(VOICE_KEY, selectedVoice.id);
   closeVoicePanel();
 }
 
 function openVoicePanel() {
   if (!voicePanel) return;
-  loadNexaVoice();
+
   voicePanel.classList.add("open");
   voiceOverlay.classList.add("open");
+
+  loadNexaVoice();
 }
 
 function closeVoicePanel() {
   if (!voicePanel) return;
+
   voicePanel.classList.remove("open");
   voiceOverlay.classList.remove("open");
 }
 
 function speakNexa(text) {
-  if (
-    !speechEnabled ||
-    !("speechSynthesis" in window) ||
-    !text
-  ) {
-    return;
+  if (!speechEnabled || !text) return;
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
   }
 
-  window.speechSynthesis.cancel();
+  if (elevenLabsAudio) {
+    elevenLabsAudio.pause();
+  }
 
   const cleanText = text
-    .replace(/[*_`#]/g, "")
+    .replace(/[*_\`#]/g, "")
     .replace(/\n+/g, " ")
     .trim();
 
   if (!cleanText) return;
 
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-
-  utterance.lang = "pt-BR";
-
   if (selectedVoice) {
-    utterance.voice = selectedVoice;
+    speakWithElevenLabs(cleanText).then(function(success) {
+      if (!success && "speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = "pt-BR";
+        utterance.rate = 1.02;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+    });
+    return;
   }
 
-  utterance.rate = 1.02;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  utterance.onend = function() {
-    scheduleWakeRestart();
-  };
-
-  window.speechSynthesis.speak(utterance);
-}
-
-if ("speechSynthesis" in window) {
-  loadNexaVoice();
-  window.speechSynthesis.onvoiceschanged = loadNexaVoice;
+  if ("speechSynthesis" in window) {
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "pt-BR";
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  }
 }
 
 if (voiceButton) voiceButton.addEventListener("click", openVoicePanel);
