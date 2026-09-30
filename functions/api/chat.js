@@ -382,8 +382,8 @@ function shouldUseCalculator(message) {
 
   const hasMathSignal =
     /[+*/%^]/.test(text) ||
-    /\d+\s*/[x×]\\s*\\d+/.test(text) ||
-    /\d+\s*/(de|por cento|%)\\s*\\d+/.test(text);
+    /\d+\s*[x×]\s*\d+/.test(text) ||
+    /\d+\s*(de|por cento|%)\s*\d+/.test(text);
 
   const hasCalculationWord =
     /quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/.test(text);
