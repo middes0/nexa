@@ -529,7 +529,17 @@ async function waitForFirstText(response, model) {
           reader,
           decoder,
           buffer,
-          firstText: text
+          firstText: text,
+          firstSources:
+            (data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
+              .map(function(chunk) {
+                const web = chunk?.web;
+                if (!web || typeof web.uri !== "string" || typeof web.title !== "string") {
+                  return null;
+                }
+                return { title: web.title, url: web.uri };
+              })
+              .filter(Boolean)
         };
       }
     }
@@ -542,6 +552,7 @@ function createClientStream(
   decoder,
   buffer,
   firstText,
+  firstSources,
   userId,
   userMessage,
   executionContext,
@@ -549,6 +560,17 @@ function createClientStream(
 ) {
   const encoder = new TextEncoder();
   let fullText = firstText;
+  const webSources = Array.isArray(firstSources)
+    ? firstSources.filter(function(source, index, array) {
+        return (
+          source &&
+          typeof source.url === "string" &&
+          array.findIndex(function(item) {
+            return item?.url === source.url;
+          }) === index
+        );
+      })
+    : [];
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -583,6 +605,28 @@ function createClientStream(
             if (!data) continue;
 
             const text = extractText(data);
+
+            const chunks =
+              data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+            for (const chunk of chunks) {
+              const web = chunk?.web;
+
+              if (
+                web &&
+                typeof web.uri === "string" &&
+                typeof web.title === "string" &&
+                !webSources.some(function(source) {
+                  return source.url === web.uri;
+                })
+              ) {
+                webSources.push({
+                  title: web.title,
+                  url: web.uri
+                });
+              }
+            }
+
             if (!text) continue;
 
             fullText += text;
@@ -613,7 +657,8 @@ function createClientStream(
 
         send({
           type: "done",
-          model: modelUsed
+          model: modelUsed,
+          sources: webSources.slice(0, 8)
         });
 
         if (executionContext?.waitUntil) {
@@ -738,6 +783,17 @@ async function createFallbackResponse(
 
   const parts = data?.candidates?.[0]?.content?.parts || [];
 
+  const groundingSources =
+    (data?.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
+      .map(function(chunk) {
+        const web = chunk?.web;
+        if (!web || typeof web.uri !== "string" || typeof web.title !== "string") {
+          return null;
+        }
+        return { title: web.title, url: web.uri };
+      })
+      .filter(Boolean);
+
   const text = parts
     .filter(function(part) {
       return (
@@ -771,7 +827,8 @@ async function createFallbackResponse(
           "data: " +
           JSON.stringify({
             type: "done",
-            model: FALLBACK_MODEL
+            model: FALLBACK_MODEL,
+            sources: groundingSources.slice(0, 8)
           }) +
           "\n\n"
         )
@@ -932,6 +989,7 @@ export async function onRequestPost(context) {
         result.decoder,
         result.buffer,
         result.firstText,
+        result.firstSources,
         userId,
         userMessage,
         context,
