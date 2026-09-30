@@ -274,20 +274,33 @@ async function scheduleNativeReminder(reminder) {
   if (!notifications || !(await requestNativeNotificationPermission())) return false;
 
   try {
+    const notification = {
+      id: getNativeNotificationId(reminder.id),
+      title: "NEXA",
+      body: reminder.text,
+      schedule: {
+        at: new Date(reminder.triggerAt),
+        allowWhileIdle: true
+      },
+      extra: {
+        type: "nexa-reminder",
+        reminderId: reminder.id
+      }
+    };
+
+    // No APK, o próprio Android mantém lembretes recorrentes agendados,
+    // mesmo quando a NEXA é fechada. Lembretes únicos continuam sendo
+    // disparados apenas uma vez.
+    if (reminder.recurrence?.type === "daily") {
+      notification.schedule.repeats = true;
+      notification.schedule.every = "day";
+    } else if (reminder.recurrence?.type === "weekly") {
+      notification.schedule.repeats = true;
+      notification.schedule.every = "week";
+    }
+
     await notifications.schedule({
-      notifications: [{
-        id: getNativeNotificationId(reminder.id),
-        title: "NEXA",
-        body: reminder.text,
-        schedule: {
-          at: new Date(reminder.triggerAt),
-          allowWhileIdle: true
-        },
-        extra: {
-          type: "nexa-reminder",
-          reminderId: reminder.id
-        }
-      }]
+      notifications: [notification]
     });
     return true;
   } catch (error) {
