@@ -1,83 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <meta
-    name="theme-color"
-    content="#07050B"
-  >
-
-  <meta
-    name="description"
-    content="NEXA — assistente pessoal inteligente"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07050B">
+  <meta name="description" content="NEXA — assistente pessoal inteligente">
   <title>NEXA</title>
-
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
   <div class="ambient ambient-three"></div>
 
   <main class="app">
-
     <header class="topbar">
-
       <div class="brand">
-
-        <div class="orb">
-          <div class="orb-inner"></div>
-        </div>
-
+        <div class="orb"><div class="orb-inner"></div></div>
         <div class="brand-info">
           <h1>NEXA</h1>
           <span>Assistente pessoal</span>
         </div>
-
       </div>
 
       <div class="topbar-actions">
+        <span class="status"><i></i> Online</span>
 
-        <span class="status">
-          <i></i>
-          Online
-        </span>
-
-        <button
-          type="button"
-          id="newChatButton"
-          class="new-chat-button"
-        >
+        <button type="button" id="newChatButton" class="new-chat-button">
           Nova conversa
         </button>
-
       </div>
-
     </header>
 
-
     <section class="hero">
-
       <div class="core">
-
         <div class="core-aura"></div>
         <div class="core-glow"></div>
-
         <div class="core-ring ring-one"></div>
         <div class="core-ring ring-two"></div>
         <div class="core-ring ring-three"></div>
-
         <div class="particle particle-one"></div>
         <div class="particle particle-two"></div>
         <div class="particle particle-three"></div>
@@ -86,87 +47,51 @@
         <div class="particle particle-six"></div>
         <div class="particle particle-seven"></div>
         <div class="particle particle-eight"></div>
-
         <div class="core-energy"></div>
         <div class="core-dot"></div>
-
       </div>
 
-      <h2>
-        Olá. Eu sou a NEXA.
-      </h2>
+      <h2>Olá. Eu sou a NEXA.</h2>
+      <p>Seu assistente pessoal está pronto para começar.</p>
+    </section>
 
-      <p>
-        Seu assistente pessoal está pronto para começar.
+    <section class="mode-panel" aria-label="Modo de resposta">
+      <div class="mode-heading">
+        <span>Modo de resposta</span>
+        <strong id="modeValue">Médio</strong>
+      </div>
+
+      <div class="mode-selector" id="modeSelector">
+        <button type="button" data-mode="none">Nenhum</button>
+        <button type="button" data-mode="low">Baixo</button>
+        <button type="button" data-mode="medium" class="active">Médio</button>
+        <button type="button" data-mode="high">Alto</button>
+        <button type="button" data-mode="maximum">Máximo</button>
+      </div>
+
+      <p class="mode-description" id="modeDescription">
+        Equilíbrio entre velocidade e profundidade.
       </p>
-
     </section>
 
-
-    <section
-      class="chat"
-      id="chat"
-      aria-live="polite"
-      aria-label="Conversa com a NEXA"
-    >
-
+    <section class="chat" id="chat" aria-live="polite" aria-label="Conversa com a NEXA">
       <div class="message nexa">
-
-        <span class="label">
-          NEXA
-        </span>
-
-        <p>
-          E aí. Sou a NEXA. Já tô online — manda a boa.
-        </p>
-
+        <span class="label">NEXA</span>
+        <p>E aí. Sou a NEXA. Já tô online — manda a boa.</p>
       </div>
-
     </section>
 
+    <form class="composer" id="composer" autocomplete="off">
+      <input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off" aria-label="Mensagem">
 
-    <form
-      class="composer"
-      id="composer"
-      autocomplete="off"
-    >
+      <button type="button" id="micButton" aria-label="Microfone" title="Falar">◉</button>
 
-      <input
-        id="messageInput"
-        type="text"
-        placeholder="Digite uma mensagem..."
-        autocomplete="off"
-        aria-label="Mensagem"
-      >
-
-      <button
-        type="button"
-        id="micButton"
-        aria-label="Microfone"
-        title="Falar"
-      >
-        ◉
-      </button>
-
-      <button
-        type="submit"
-        aria-label="Enviar"
-        title="Enviar mensagem"
-      >
-        ➤
-      </button>
-
+      <button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button>
     </form>
 
-
-    <footer>
-      NEXA v0.2 • Gemini conectado via Cloudflare
-    </footer>
-
+    <footer>NEXA v0.3 • Gemini conectado via Cloudflare</footer>
   </main>
 
-  <script src="script.js?v=3"></script>
-
+  <script src="script.js?v=4"></script>
 </body>
-
 </html>
