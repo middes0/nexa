@@ -336,7 +336,7 @@ function buildContents(messages, memories) {
       role: "user",
       parts: [{
         text:
-          "Memórias relevantes sobre o usuário:\n" +
+          "Memórias do usuário para contexto. Use somente quando forem relevantes; não mencione a lista sem necessidade. Priorize o que o usuário acabou de dizer.\n" +
           memories.map(function(memory) {
             return "- " + memory;
           }).join("\n")
@@ -617,7 +617,7 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode, use
     groqMessages.push({
       role: "system",
       content:
-        "Memórias relevantes sobre o usuário:\n" +
+        "Memórias do usuário para contexto. Use somente quando forem relevantes; não mencione a lista sem necessidade. Priorize o que o usuário acabou de dizer.\n" +
         memories.map(function(memory) {
           return "- " + memory;
         }).join("\n")
@@ -970,7 +970,7 @@ async function createWebSearchResponse(
     input.push({
       role: "system",
       content:
-        "Memórias relevantes sobre o usuário:\n" +
+        "Memórias do usuário para contexto. Use somente quando forem relevantes; não mencione a lista sem necessidade. Priorize o que o usuário acabou de dizer.\n" +
         memories.map(function(memory) {
           return "- " + memory;
         }).join("\n")
