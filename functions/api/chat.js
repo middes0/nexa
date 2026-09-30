@@ -212,7 +212,7 @@ function normalizeCalculatorExpression(input) {
     .replace(/\bx\b/g, "*")
     .replace(/,/g, ".")
     .replace(/%/g, "/100")
-    .replace(/[^0-9+\\-*/().%^\\s]/g, "")
+    .replace(/[^0-9+\-*\/().%^ \t]/g, "")
     .replace(/\^/g, "**")
     .trim();
 
@@ -238,7 +238,7 @@ function tokenizeCalculator(expression) {
         number += expression[i++];
       }
 
-      if ((number.match(/\\./g) || []).length > 1 || number === ".") {
+      if ((number.match(/\./g) || []).length > 1 || number === ".") {
         throw new Error("Número inválido.");
       }
 
