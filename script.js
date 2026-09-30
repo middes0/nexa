@@ -2609,7 +2609,7 @@ restoreSavedNexaVoice();
       setState(
         "",
         "Pronta para ouvir",
-        "Toque no microfone e fale com a NEXA."
+        "Fale agora. A NEXA já está ouvindo."
       );
     };
 
@@ -2656,7 +2656,7 @@ restoreSavedNexaVoice();
       "Toque no microfone e fale com a NEXA."
     );
 
-    // Inicia a escuta somente após o toque que abriu o modo de voz.
+    // O próprio botão que abre o modo de voz já autoriza a primeira escuta.
     setTimeout(function() {
       if (voiceModeActive && !recognitionActive && !waitingForReply) {
         startRecognition();
@@ -2682,30 +2682,43 @@ restoreSavedNexaVoice();
   function toggleListening() {
     if (!voiceModeActive) return;
 
-    if (recognitionActive) {
-      stopRecognition();
-      setState(
-        "",
-        "Pausado",
-        "Toque no microfone quando quiser falar."
-      );
-      return;
-    }
-
-    if (waitingForReply) return;
+    // O modo de voz é contínuo: enquanto já estiver ouvindo,
+    // não interrompe o reconhecimento por causa de um segundo toque.
+    if (recognitionActive || waitingForReply) return;
 
     startRecognition();
   }
+
+  let resumeTimer = null;
 
   function resumeVoiceListening() {
     if (!voiceModeActive) return;
 
     waitingForReply = false;
+    selectedVoiceModeText = "";
+
     setState(
       "",
       "Pronta para ouvir",
-      "Toque no microfone e fale com a NEXA."
+      "Fale agora. A NEXA já está ouvindo."
     );
+
+    if (resumeTimer) {
+      clearTimeout(resumeTimer);
+      resumeTimer = null;
+    }
+
+    // O reconhecimento anterior precisa terminar completamente antes
+    // de abrir outro. Isso evita o erro que aparecia na segunda fala.
+    resumeTimer = setTimeout(function() {
+      resumeTimer = null;
+
+      if (!voiceModeActive || waitingForReply || recognitionActive) {
+        return;
+      }
+
+      startRecognition();
+    }, 350);
   }
 
   window.NEXAVoiceMode = {
