@@ -162,8 +162,22 @@ async function loadNexaVoice() {
   } catch (error) {
     availableVoices = [];
     selectedVoice = null;
+    const detail = error?.message
+      ? String(error.message).slice(0, 220)
+      : "Erro desconhecido.";
+
     voiceList.innerHTML =
-      '<div class="voice-empty">Não consegui carregar as vozes da ElevenLabs.</div>';
+      '<div class="voice-empty">Não consegui carregar as vozes da ElevenLabs.<br><br><small>' +
+      detail.replace(/[<>&"]/g, function(char) {
+        return {
+          "<": "&lt;",
+          ">": "&gt;",
+          "&": "&amp;",
+          '"': "&quot;"
+        }[char];
+      }) +
+      '</small></div>';
+
     console.error("Erro ao carregar vozes da ElevenLabs:", error);
   }
 }
