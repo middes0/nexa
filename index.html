@@ -26,6 +26,7 @@
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
         <button type="button" id="voiceButton" class="voice-button" aria-label="Escolher voz" title="Voz da NEXA">◉</button>
+        <button type="button" id="voiceModeButton" class="voice-mode-button" aria-label="Abrir modo de voz" title="Modo de voz">◌</button>
         <button type="button" id="speechToggleButton" class="speech-toggle-button" aria-label="Calar a NEXA" title="NEXA falando — toque para calar">◖</button>
 <div class="voice-overlay" id="voiceOverlay"></div>
 <aside class="voice-panel" id="voicePanel" aria-label="Voz da NEXA">
@@ -40,6 +41,34 @@
         </button>
       </div>
     </header>
+
+    <div class="voice-mode-overlay" id="voiceModeOverlay"></div>
+    <section class="voice-mode" id="voiceMode" aria-label="Modo de voz" aria-hidden="true">
+      <div class="voice-mode-top">
+        <div>
+          <strong>NEXA</strong>
+          <span id="voiceModeState">Pronta para ouvir</span>
+        </div>
+        <button type="button" id="voiceModeClose" class="voice-mode-close" aria-label="Fechar modo de voz">×</button>
+      </div>
+
+      <div class="voice-orb-stage" id="voiceOrbStage">
+        <div class="voice-orb-aura"></div>
+        <div class="voice-orb-ring voice-orb-ring-one"></div>
+        <div class="voice-orb-ring voice-orb-ring-two"></div>
+        <div class="voice-orb-ring voice-orb-ring-three"></div>
+        <div class="voice-orb-core">
+          <div class="voice-orb-core-glow"></div>
+          <div class="voice-orb-dot"></div>
+        </div>
+      </div>
+
+      <div class="voice-mode-caption" id="voiceModeCaption">Toque no microfone e fale com a NEXA.</div>
+
+      <div class="voice-mode-actions">
+        <button type="button" id="voiceModeMic" class="voice-mode-mic" aria-label="Começar a falar" title="Começar a falar">◉</button>
+      </div>
+    </section>
 
     <div class="history-overlay" id="historyOverlay"></div>
     <aside class="history-panel" id="historyPanel" aria-label="Histórico de conversas">
@@ -174,6 +203,6 @@
   </main>
 
   <script src="automation.js"></script>
-  <script src="script.js?v=14"></script>
+  <script src="script.js?v=15"></script>
 </body>
 </html>
