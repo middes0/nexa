@@ -5,7 +5,7 @@
 const NEXA_AUTOMATIONS_KEY = "nexa_automations";
 
 function nexaAutomationId() {
-  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return "automation_" + Date.now() + "_" + Math.random().toString(16).slice(2);
 }
 
