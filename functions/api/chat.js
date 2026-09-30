@@ -75,12 +75,74 @@ async function getMemories(env, userId) {
 async function saveMemory(env, userId, memory) {
   if (!env.DB || !userId || !memory) return;
 
+  const normalized = String(memory)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return;
+
   try {
+    const existing = await env.DB
+      .prepare(
+        "SELECT id FROM memories WHERE user_id = ? AND lower(memory) = lower(?) LIMIT 1"
+      )
+      .bind(userId, normalized)
+      .first();
+
+    if (existing) return;
+
     await env.DB
       .prepare("INSERT INTO memories (user_id, memory, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
-      .bind(userId, memory)
+      .bind(userId, normalized.slice(0, 500))
       .run();
   } catch (error) {}
+}
+
+async function getMemoryList(env, userId) {
+  if (!env.DB || !userId) return [];
+
+  try {
+    const result = await env.DB
+      .prepare(
+        "SELECT id, memory, created_at FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 50"
+      )
+      .bind(userId)
+      .all();
+
+    return result.results || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+async function deleteMemory(env, userId, memoryId) {
+  if (!env.DB || !userId || !Number.isInteger(memoryId)) return false;
+
+  try {
+    await env.DB
+      .prepare("DELETE FROM memories WHERE user_id = ? AND id = ?")
+      .bind(userId, memoryId)
+      .run();
+
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function clearMemories(env, userId) {
+  if (!env.DB || !userId) return false;
+
+  try {
+    await env.DB
+      .prepare("DELETE FROM memories WHERE user_id = ?")
+      .bind(userId)
+      .run();
+
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 async function cleanMemory(env, userId) {
@@ -107,9 +169,11 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
     "Usuário:\n" + userMessage +
     "\n\nNEXA:\n" + assistantMessage +
     "\n\n" +
-    "Se houver alguma informação realmente útil para lembrar sobre o usuário " +
+    "Se houver uma informação estável e realmente útil para lembrar sobre o usuário " +
     "(preferência, projeto, objetivo, nome, contexto pessoal ou algo que possa " +
-    "ser útil futuramente), responda SOMENTE com essa memória em uma frase curta.\n\n" +
+    "ser útil futuramente), responda SOMENTE com uma frase curta em terceira pessoa.\n\n" +
+    "Não salve detalhes passageiros, perguntas comuns, fatos sobre a NEXA ou informações " +
+    "que não sejam claramente sobre o usuário.\n\n" +
     "Se não houver nada relevante, responda:\nNENHUMA\n\n" +
     "Não invente informações.";
 
@@ -953,6 +1017,42 @@ export async function onRequestPost(context) {
       typeof body?.message === "string"
         ? body.message.trim().slice(0, 4000)
         : "";
+
+    const memoryAction =
+      typeof body?.action === "string"
+        ? body.action
+        : "";
+
+    if (memoryAction === "get_memories") {
+      return jsonResponse({
+        memories: await getMemoryList(env, userId)
+      });
+    }
+
+    if (memoryAction === "delete_memory") {
+      const memoryId = Number(body?.memoryId);
+
+      if (!Number.isInteger(memoryId)) {
+        return jsonResponse(
+          { error: "Memória inválida." },
+          400
+        );
+      }
+
+      await deleteMemory(env, userId, memoryId);
+
+      return jsonResponse({
+        memories: await getMemoryList(env, userId)
+      });
+    }
+
+    if (memoryAction === "clear_memories") {
+      await clearMemories(env, userId);
+
+      return jsonResponse({
+        memories: []
+      });
+    }
 
     const mode =
       ["none", "low", "medium", "high", "maximum"].includes(body?.mode)
