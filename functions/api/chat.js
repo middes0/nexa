@@ -417,6 +417,12 @@ function runCalculatorTool(message) {
   }
 }
 
+function shouldUseWebSearch(message) {
+  const text = String(message || "").toLowerCase();
+
+  return /\b(pesquise|pesquisa|pesquisar|procure|procurar|busque|buscar|internet|web|site|sites|notícia|noticias|notícias|atual|atualmente|agora|hoje|ontem|recentemente|preço|precos|preços|cotação|cotacao|cotação|quem ganhou|resultado)\b/.test(text);
+}
+
 function getThinkingConfig(mode) {
   const level = THINKING_LEVELS[mode];
 
@@ -427,7 +433,7 @@ function getThinkingConfig(mode) {
   };
 }
 
-function createModelRequest(model, apiKey, messages, memories, signal, mode) {
+function createModelRequest(model, apiKey, messages, memories, signal, mode, useWebSearch) {
   const generationConfig = {
     maxOutputTokens:
       mode === "maximum"
@@ -459,7 +465,7 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode) {
         },
         contents: buildContents(messages, memories),
         generationConfig,
-        tools: [{ google_search: {} }]
+        ...(useWebSearch ? { tools: [{ google_search: {} }] } : {})
       })
     }
   );
@@ -979,7 +985,8 @@ export async function onRequestPost(context) {
         messages,
         memories,
         controller.signal,
-        mode
+        mode,
+        shouldUseWebSearch(userMessage)
       );
 
       const result = await waitForFirstText(
@@ -1011,7 +1018,8 @@ export async function onRequestPost(context) {
           messages,
           memories,
           null,
-          mode
+          mode,
+          shouldUseWebSearch(userMessage)
         );
 
         const result = await waitForFirstText(
@@ -1035,7 +1043,10 @@ export async function onRequestPost(context) {
         return jsonResponse(
           {
             error:
-              "A NEXA não conseguiu responder agora. Tente novamente."
+              "Gemini: " +
+              (geminiError?.message || "erro desconhecido") +
+              " | Fallback: " +
+              (gemmaError?.message || "erro desconhecido")
           },
           503
         );
