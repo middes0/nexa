@@ -25,7 +25,6 @@
 
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
-
         <button type="button" id="newChatButton" class="new-chat-button">
           Nova conversa
         </button>
@@ -67,18 +66,38 @@
 
       <div class="composer-mode">
         <button type="button" id="modeButton" class="mode-button" aria-label="Escolher modo de resposta" title="Modo de resposta">M</button>
+
         <div class="mode-menu" id="modeMenu">
           <div class="mode-menu-title">Modo de resposta</div>
-          <button type="button" data-mode="none">Nenhum</button>
-          <button type="button" data-mode="low">Baixo</button>
-          <button type="button" data-mode="medium">Médio</button>
-          <button type="button" data-mode="high">Alto</button>
-          <button type="button" data-mode="maximum">Máximo</button>
+
+          <button type="button" data-mode="none">
+            <strong>Nenhum</strong>
+            <span>Quase instantâneo, sem pensar muito.</span>
+          </button>
+
+          <button type="button" data-mode="low">
+            <strong>Baixo</strong>
+            <span>Pensa um pouco antes de responder.</span>
+          </button>
+
+          <button type="button" data-mode="medium">
+            <strong>Médio</strong>
+            <span>Equilibra o tempo de pensar e responder.</span>
+          </button>
+
+          <button type="button" data-mode="high">
+            <strong>Alto</strong>
+            <span>Pensa mais para dar uma resposta melhor.</span>
+          </button>
+
+          <button type="button" data-mode="maximum">
+            <strong>Máximo</strong>
+            <span>Pensa muito mais, com maior profundidade.</span>
+          </button>
         </div>
       </div>
 
       <button type="button" id="micButton" aria-label="Microfone" title="Falar">◉</button>
-
       <button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button>
     </form>
 
