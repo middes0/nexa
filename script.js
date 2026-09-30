@@ -3132,6 +3132,47 @@ document.addEventListener("keydown", function(event) {
   }
 });
 
+const settingsModeSelect = document.getElementById("settingsModeSelect");
+const settingsSpeechToggle = document.getElementById("settingsSpeechToggle");
+const settingsMotionToggle = document.getElementById("settingsMotionToggle");
+const REDUCED_MOTION_KEY = "nexa_reduce_motion";
+
+function updateSettingsControls() {
+  if (settingsModeSelect) settingsModeSelect.value = responseMode;
+  if (settingsSpeechToggle) {
+    settingsSpeechToggle.classList.toggle("active", speechEnabled);
+    settingsSpeechToggle.setAttribute("aria-checked", String(speechEnabled));
+    settingsSpeechToggle.setAttribute("aria-label", speechEnabled ? "Desativar fala automática" : "Ativar fala automática");
+  }
+  const reduced = localStorage.getItem(REDUCED_MOTION_KEY) === "true";
+  document.body.classList.toggle("nexa-reduced-motion", reduced);
+  if (settingsMotionToggle) {
+    settingsMotionToggle.classList.toggle("active", reduced);
+    settingsMotionToggle.setAttribute("aria-checked", String(reduced));
+  }
+}
+
+settingsModeSelect?.addEventListener("change", function() {
+  const nextMode = settingsModeSelect.value;
+  if (!MODE_INFO[nextMode]) return;
+  responseMode = nextMode;
+  localStorage.setItem(MODE_KEY, responseMode);
+  updateModeUI();
+});
+
+settingsSpeechToggle?.addEventListener("click", function() {
+  setNexaSpeechEnabled(!speechEnabled);
+  updateSettingsControls();
+});
+
+settingsMotionToggle?.addEventListener("click", function() {
+  const reduced = localStorage.getItem(REDUCED_MOTION_KEY) !== "true";
+  localStorage.setItem(REDUCED_MOTION_KEY, String(reduced));
+  updateSettingsControls();
+});
+
+updateSettingsControls();
+
 const settingsVoiceItem = document.querySelector(".settings-item:not(.static)");
 settingsVoiceItem?.addEventListener("click", function() {
   closeNexaSettings();
