@@ -2608,8 +2608,8 @@ restoreSavedNexaVoice();
 
       setState(
         "",
-        "Não entendi",
-        "Toque no microfone e tente falar novamente."
+        "Pronta para ouvir",
+        "Toque no microfone e fale com a NEXA."
       );
     };
 
@@ -2621,11 +2621,11 @@ restoreSavedNexaVoice();
         !waitingForReply &&
         panel.classList.contains("listening")
       ) {
-        setState(
-          "",
-          "Pronta para ouvir",
-          "Toque no microfone e fale com a NEXA."
-        );
+        setTimeout(function() {
+          if (voiceModeActive && !waitingForReply && !recognitionActive) {
+            startRecognition();
+          }
+        }, 250);
       }
     };
 
@@ -2652,9 +2652,16 @@ restoreSavedNexaVoice();
 
     setState(
       "",
-      "Modo de voz",
+      "Pronta para ouvir",
       "Toque no microfone e fale com a NEXA."
     );
+
+    // Inicia a escuta somente após o toque que abriu o modo de voz.
+    setTimeout(function() {
+      if (voiceModeActive && !recognitionActive && !waitingForReply) {
+        startRecognition();
+      }
+    }, 180);
   }
 
   function closeVoiceMode() {
