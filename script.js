@@ -161,12 +161,130 @@ function speakNexa(text) {
   utterance.pitch = 1;
   utterance.volume = 1;
 
+  utterance.onend = function() {
+    scheduleWakeRestart();
+  };
+
   window.speechSynthesis.speak(utterance);
 }
 
 if ("speechSynthesis" in window) {
   loadNexaVoice();
   window.speechSynthesis.onvoiceschanged = loadNexaVoice;
+}
+
+/* =========================
+   PALAVRA DE ATIVAÇÃO — "NEXA"
+========================= */
+
+let wakeRecognition = null;
+let wakeListening = false;
+let wakeRestartTimer = null;
+let wakeCommandMode = false;
+
+function startWakeWord() {
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition || wakeListening) return;
+
+  if (wakeRecognition) {
+    try {
+      wakeRecognition.stop();
+    } catch (error) {}
+  }
+
+  wakeRecognition = new SpeechRecognition();
+  wakeRecognition.lang = "pt-BR";
+  wakeRecognition.continuous = true;
+  wakeRecognition.interimResults = false;
+  wakeRecognition.maxAlternatives = 3;
+
+  wakeRecognition.onstart = function() {
+    wakeListening = true;
+  };
+
+  wakeRecognition.onresult = async function(event) {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (!event.results[i].isFinal) continue;
+
+      const heard = event.results[i][0].transcript
+        .trim()
+        .replace(/^[,.:;!?\s]+|[,.:;!?\s]+$/g, "");
+
+      if (!heard) continue;
+
+      const normalized = heard
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+      const wakeMatch = normalized.match(
+        /^(?:oi\s+)?nexa\b(?:[,.:;!?\s]+(.*))?$/i
+      );
+
+      if (!wakeMatch) continue;
+
+      const command = (wakeMatch[1] || "").trim();
+
+      if (!command) {
+        speakNexa("Tô ouvindo.");
+        continue;
+      }
+
+      if (sendButton.disabled) continue;
+
+      input.value = command;
+      composer.requestSubmit();
+    }
+  };
+
+  wakeRecognition.onerror = function(event) {
+    wakeListening = false;
+
+    if (
+      event.error === "not-allowed" ||
+      event.error === "service-not-allowed"
+    ) {
+      return;
+    }
+
+    scheduleWakeRestart();
+  };
+
+  wakeRecognition.onend = function() {
+    wakeListening = false;
+    scheduleWakeRestart();
+  };
+
+  try {
+    wakeRecognition.start();
+  } catch (error) {
+    scheduleWakeRestart();
+  }
+}
+
+function scheduleWakeRestart() {
+  if (wakeRestartTimer) return;
+
+  wakeRestartTimer = setTimeout(function() {
+    wakeRestartTimer = null;
+
+    if (!wakeListening && !wakeCommandMode) {
+      startWakeWord();
+    }
+  }, 700);
+}
+
+if (
+  "SpeechRecognition" in window ||
+  "webkitSpeechRecognition" in window
+) {
+  window.addEventListener("load", function() {
+    setTimeout(startWakeWord, 1200);
+  });
 }
 
 /* =========================
@@ -1040,6 +1158,7 @@ function handleNaturalLocalCommand(text) {
 composer.addEventListener(
   "submit",
   async function(event) {
+    wakeCommandMode = true;
     event.preventDefault();
 
     const text = input.value.trim();
@@ -1089,6 +1208,8 @@ composer.addEventListener(
       newChatButton.disabled = false;
 
       modeButton.disabled = false;
+      wakeCommandMode = false;
+      scheduleWakeRestart();
 
       input.focus();
     }
