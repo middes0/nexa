@@ -2503,9 +2503,12 @@ restoreSavedNexaVoice();
 
   let recognition = null;
   let recognitionActive = false;
+  let recognitionEnded = true;
   let voiceModeActive = false;
   let waitingForReply = false;
   let selectedVoiceModeText = "";
+  let restartTimer = null;
+  let recognitionGeneration = 0;
 
   function setState(mode, title, detail) {
     panel.classList.remove("listening", "thinking", "speaking");
@@ -2524,10 +2527,49 @@ restoreSavedNexaVoice();
     return window.SpeechRecognition || window.webkitSpeechRecognition;
   }
 
+  function clearRestartTimer() {
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+  }
+
   function stopRecognition() {
-    if (!recognition) return;
-    try { recognition.stop(); } catch {}
+    const current = recognition;
+
+    if (!current) {
+      recognitionActive = false;
+      recognitionEnded = true;
+      return;
+    }
+
     recognitionActive = false;
+    recognitionEnded = false;
+
+    try {
+      current.stop();
+    } catch (error) {
+      recognitionEnded = true;
+    }
+  }
+
+  function scheduleRecognitionRestart(delay) {
+    clearRestartTimer();
+
+    restartTimer = setTimeout(function() {
+      restartTimer = null;
+
+      if (
+        !voiceModeActive ||
+        waitingForReply ||
+        recognitionActive ||
+        !recognitionEnded
+      ) {
+        return;
+      }
+
+      startRecognition();
+    }, delay);
   }
 
   function startRecognition() {
@@ -2542,29 +2584,48 @@ restoreSavedNexaVoice();
       return false;
     }
 
-    if (!voiceModeActive || recognitionActive || waitingForReply) return false;
+    if (
+      !voiceModeActive ||
+      waitingForReply ||
+      recognitionActive ||
+      !recognitionEnded
+    ) {
+      return false;
+    }
 
     if (wakeRecognition && wakeListening) {
-      try { wakeRecognition.stop(); } catch {}
+      try { wakeRecognition.stop(); } catch (error) {}
       wakeListening = false;
     }
 
-    recognition = new SpeechRecognition();
-    recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    const generation = ++recognitionGeneration;
+    const current = new SpeechRecognition();
 
-    recognition.onstart = function() {
+    recognition = current;
+    recognitionActive = false;
+    recognitionEnded = false;
+
+    current.lang = "pt-BR";
+    current.continuous = false;
+    current.interimResults = true;
+    current.maxAlternatives = 1;
+
+    current.onstart = function() {
+      if (generation !== recognitionGeneration || !voiceModeActive) return;
+
       recognitionActive = true;
+      recognitionEnded = false;
+
       setState(
         "listening",
         "Ouvindo...",
-        "Fale normalmente. A NEXA vai responder quando você terminar."
+        "Fale normalmente. A NEXA responde quando você terminar."
       );
     };
 
-    recognition.onresult = function(event) {
+    current.onresult = function(event) {
+      if (generation !== recognitionGeneration || !voiceModeActive) return;
+
       let transcript = "";
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -2572,14 +2633,16 @@ restoreSavedNexaVoice();
       }
 
       selectedVoiceModeText = transcript.trim();
+
       if (caption && selectedVoiceModeText) {
         caption.textContent = selectedVoiceModeText;
       }
 
       const last = event.results[event.results.length - 1];
+
       if (last?.isFinal && selectedVoiceModeText) {
-        stopRecognition();
         waitingForReply = true;
+
         setState(
           "thinking",
           "Pensando...",
@@ -2588,16 +2651,29 @@ restoreSavedNexaVoice();
 
         input.value = selectedVoiceModeText;
         selectedVoiceModeText = "";
+
+        // O reconhecimento será encerrado pelo onend.
+        // Só depois disso permitimos uma nova sessão.
+        try {
+          current.stop();
+        } catch (error) {}
+
         composer.requestSubmit();
       }
     };
 
-    recognition.onerror = function(event) {
+    current.onerror = function(event) {
+      if (generation !== recognitionGeneration) return;
+
       recognitionActive = false;
 
       if (!voiceModeActive) return;
 
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      if (
+        event.error === "not-allowed" ||
+        event.error === "service-not-allowed"
+      ) {
+        recognitionEnded = true;
         setState(
           "",
           "Microfone bloqueado",
@@ -2606,35 +2682,41 @@ restoreSavedNexaVoice();
         return;
       }
 
+      // Android/Chrome pode emitir "aborted", "no-speech" ou "network"
+      // ao encerrar uma sessão. Não tratamos isso como bloqueio.
       setState(
         "",
         "Pronta para ouvir",
-        "Fale agora. A NEXA já está ouvindo."
+        "A NEXA vai continuar ouvindo automaticamente."
       );
     };
 
-    recognition.onend = function() {
+    current.onend = function() {
+      if (generation !== recognitionGeneration) return;
+
       recognitionActive = false;
+      recognitionEnded = true;
 
       if (
         voiceModeActive &&
         !waitingForReply &&
         panel.classList.contains("listening")
       ) {
-        setTimeout(function() {
-          if (voiceModeActive && !waitingForReply && !recognitionActive) {
-            startRecognition();
-          }
-        }, 250);
+        scheduleRecognitionRestart(500);
       }
     };
 
     try {
-      recognition.start();
+      current.start();
       return true;
     } catch (error) {
       recognitionActive = false;
-      setState("", "Microfone indisponível", "Tente novamente.");
+      recognitionEnded = true;
+
+      if (voiceModeActive && !waitingForReply) {
+        scheduleRecognitionRestart(1000);
+      }
+
       return false;
     }
   }
@@ -2643,6 +2725,9 @@ restoreSavedNexaVoice();
     voiceModeActive = true;
     waitingForReply = false;
     selectedVoiceModeText = "";
+    recognitionEnded = true;
+
+    clearRestartTimer();
 
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
@@ -2653,15 +2738,10 @@ restoreSavedNexaVoice();
     setState(
       "",
       "Pronta para ouvir",
-      "Toque no microfone e fale com a NEXA."
+      "Fale agora. A NEXA já está ouvindo."
     );
 
-    // O próprio botão que abre o modo de voz já autoriza a primeira escuta.
-    setTimeout(function() {
-      if (voiceModeActive && !recognitionActive && !waitingForReply) {
-        startRecognition();
-      }
-    }, 180);
+    scheduleRecognitionRestart(180);
   }
 
   function closeVoiceMode() {
@@ -2669,7 +2749,18 @@ restoreSavedNexaVoice();
     waitingForReply = false;
     selectedVoiceModeText = "";
 
-    stopRecognition();
+    clearRestartTimer();
+
+    recognitionGeneration++;
+
+    if (recognition) {
+      try { recognition.stop(); } catch (error) {}
+    }
+
+    recognition = null;
+    recognitionActive = false;
+    recognitionEnded = true;
+
     stopNexaSpeech();
 
     panel.classList.remove("open", "listening", "thinking", "speaking");
@@ -2682,14 +2773,12 @@ restoreSavedNexaVoice();
   function toggleListening() {
     if (!voiceModeActive) return;
 
-    // O modo de voz é contínuo: enquanto já estiver ouvindo,
-    // não interrompe o reconhecimento por causa de um segundo toque.
-    if (recognitionActive || waitingForReply) return;
+    // O modo é contínuo. O botão não precisa ser pressionado
+    // novamente depois que a NEXA termina de falar.
+    if (recognitionActive || waitingForReply || !recognitionEnded) return;
 
     startRecognition();
   }
-
-  let resumeTimer = null;
 
   function resumeVoiceListening() {
     if (!voiceModeActive) return;
@@ -2703,22 +2792,13 @@ restoreSavedNexaVoice();
       "Fale agora. A NEXA já está ouvindo."
     );
 
-    if (resumeTimer) {
-      clearTimeout(resumeTimer);
-      resumeTimer = null;
+    // Aguarda o onend real da sessão anterior. No Android isso é
+    // importante para não abrir uma segunda sessão cedo demais.
+    if (!recognitionEnded) {
+      return;
     }
 
-    // O reconhecimento anterior precisa terminar completamente antes
-    // de abrir outro. Isso evita o erro que aparecia na segunda fala.
-    resumeTimer = setTimeout(function() {
-      resumeTimer = null;
-
-      if (!voiceModeActive || waitingForReply || recognitionActive) {
-        return;
-      }
-
-      startRecognition();
-    }, 350);
+    scheduleRecognitionRestart(500);
   }
 
   window.NEXAVoiceMode = {
@@ -2756,6 +2836,6 @@ restoreSavedNexaVoice();
   setState(
     "",
     "Modo de voz",
-    "Toque no microfone e fale com a NEXA."
+    "Fale agora. A NEXA já está ouvindo."
   );
 })();
