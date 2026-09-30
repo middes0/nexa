@@ -648,6 +648,40 @@ function createClientStream(
   });
 }
 
+function createCalculatorResponse(toolResult) {
+  const encoder = new TextEncoder();
+  const text = toolResult.error
+    ? "Não consegui calcular isso: " + toolResult.error
+    : toolResult.result;
+
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          "data: " + JSON.stringify({ type: "text", text }) + "\\n\\n"
+        )
+      );
+
+      controller.enqueue(
+        encoder.encode(
+          "data: " + JSON.stringify({ type: "done", model: "nexa-calculator" }) + "\\n\\n"
+        )
+      );
+
+      controller.close();
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      ...CORS_HEADERS
+    }
+  });
+}
+
 async function createFallbackResponse(
   env,
   messages,
@@ -863,6 +897,12 @@ export async function onRequestPost(context) {
         },
         400
       );
+    }
+
+    const calculatorResult = runCalculatorTool(userMessage);
+
+    if (calculatorResult) {
+      return createCalculatorResponse(calculatorResult);
     }
 
     const memories = await getMemories(env, userId);
