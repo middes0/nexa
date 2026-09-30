@@ -268,36 +268,49 @@ function hideTyping() {
 }
 
 function renderWebSources(sources, message) {
-  if (!Array.isArray(sources) || !sources.length) return;
+  if (!Array.isArray(sources) || !sources.length || !message) return;
+
+  const validSources = sources
+    .filter(function(source) {
+      return (
+        source &&
+        typeof source.url === "string" &&
+        /^https?:\\/\\//i.test(source.url) &&
+        typeof source.title === "string" &&
+        source.title.trim()
+      );
+    })
+    .filter(function(source, index, array) {
+      return array.findIndex(function(item) {
+        return item.url === source.url;
+      }) === index;
+    })
+    .slice(0, 8);
+
+  if (!validSources.length) return;
+
+  const oldBox = message.querySelector(".web-sources");
+  if (oldBox) oldBox.remove();
 
   const box = document.createElement("div");
   box.className = "web-sources";
 
   const title = document.createElement("div");
   title.className = "web-sources-title";
-  title.textContent = "Fontes";
+  title.textContent = "Fontes da pesquisa";
 
   const list = document.createElement("div");
   list.className = "web-sources-list";
 
-  sources.slice(0, 8).forEach(function(source) {
-    if (
-      !source ||
-      typeof source.url !== "string" ||
-      typeof source.title !== "string"
-    ) return;
-
+  validSources.forEach(function(source) {
     const link = document.createElement("a");
     link.className = "web-source";
     link.href = source.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.textContent = source.title;
-
+    link.textContent = source.title.trim();
     list.appendChild(link);
   });
-
-  if (!list.children.length) return;
 
   box.appendChild(title);
   box.appendChild(list);
