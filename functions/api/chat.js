@@ -672,7 +672,9 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode, use
     content: SYSTEM_PROMPT
   });
 
-  if (memories.length) {
+  const contextualMemories = selectContextualMemories(memories, messages);
+
+  if (contextualMemories.length) {
     groqMessages.push({
       role: "system",
       content:
