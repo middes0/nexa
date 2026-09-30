@@ -160,11 +160,13 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
 
             @Override public void onError(int error) {
                 recognizer = null;
-                if (commandMode == command) {
-                    startRecognition(command);
-                } else {
-                    startRecognition(false);
-                }
+                handler.postDelayed(() -> {
+                    if (commandMode == command) {
+                        startRecognition(command);
+                    } else {
+                        startRecognition(false);
+                    }
+                }, command ? 350L : 250L);
             }
 
             @Override public void onResults(Bundle results) {
@@ -187,15 +189,8 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
             }
 
             @Override public void onPartialResults(Bundle partialResults) {
-                if (!command) {
-                    ArrayList<String> values =
-                        partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (values != null && !values.isEmpty() && containsWakeWord(values.get(0))) {
-                        stopRecognizer();
-                        commandMode = true;
-                        startCommandListening();
-                    }
-                }
+                // Wait for the final result before switching to command mode.
+                // This prevents the recognizer from being stopped too early.
             }
 
             @Override public void onEvent(int eventType, Bundle params) {}
@@ -214,7 +209,7 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
         try {
             recognizer.startListening(intent);
         } catch (Exception e) {
-            startRecognition(command);
+            handler.postDelayed(() -> startRecognition(command), 500L);
         }
     }
 
