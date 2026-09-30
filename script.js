@@ -428,6 +428,41 @@ function renderVoiceList() {
   });
 }
 
+async function fetchElevenLabsAudio(text, token) {
+  if (!selectedVoice || !text) return null;
+
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "elevenlabs_tts",
+      voiceId: selectedVoice.id,
+      text: text.slice(0, 1800),
+      userId
+    })
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(function() {
+      return null;
+    });
+
+    throw new Error(
+      data?.error || "Erro ao gerar áudio da ElevenLabs."
+    );
+  }
+
+  if (token !== voiceSpeechToken) return null;
+
+  const blob = await response.blob();
+
+  if (token !== voiceSpeechToken) return null;
+
+  return URL.createObjectURL(blob);
+}
+
 async function speakWithElevenLabs(text, options) {
   if (!selectedVoice || !text) return false;
 
@@ -436,39 +471,20 @@ async function speakWithElevenLabs(text, options) {
   const requestId = ++elevenLabsRequestId;
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: "elevenlabs_tts",
-        voiceId: selectedVoice.id,
-        text: text.slice(0, 1800),
-        userId
-      })
-    });
+    const url = await fetchElevenLabsAudio(text, voiceSpeechToken);
 
-    if (!response.ok) {
-      const data = await response.json().catch(function() {
-        return null;
-      });
-
-      throw new Error(
-        data?.error || "Erro ao gerar áudio da ElevenLabs."
-      );
+    if (!url || requestId !== elevenLabsRequestId) {
+      if (url) {
+        try { URL.revokeObjectURL(url); } catch (error) {}
+      }
+      return false;
     }
-
-    const blob = await response.blob();
-
-    if (requestId !== elevenLabsRequestId) return false;
 
     if (elevenLabsAudio) {
       elevenLabsAudio.pause();
       try { URL.revokeObjectURL(elevenLabsAudio.src); } catch (error) {}
     }
 
-    const url = URL.createObjectURL(blob);
     elevenLabsAudio = new Audio(url);
     elevenLabsAudio.preload = "auto";
     elevenLabsAudio.volume = 1;
@@ -497,6 +513,7 @@ async function speakWithElevenLabs(text, options) {
   }
 }
 
+
 function resetVoiceSpeechQueue() {
   voiceSpeechToken++;
   voiceSpeechQueue = [];
@@ -516,7 +533,15 @@ function queueVoiceSpeech(text) {
     return;
   }
 
-  voiceSpeechQueue.push(clean);
+  voiceSpeechQueue.push({
+    text: clean,
+    audioPromise: null,
+    audioUrl: null
+  });
+
+  // A primeira frase começa imediatamente; as próximas são pré-carregadas
+  // em paralelo para eliminar os gargalos entre frases.
+  prefetchVoiceQueue();
   processVoiceSpeechQueue();
 }
 
@@ -540,16 +565,61 @@ async function processVoiceSpeechQueue() {
 
   voiceSpeechRunning = true;
   const token = voiceSpeechToken;
-  const text = voiceSpeechQueue.shift();
+  const item = voiceSpeechQueue.shift();
+
+  // A fila restante já pode ser preparada enquanto esta frase toca.
+  prefetchVoiceQueue();
 
   window.NEXAVoiceMode.setSpeaking();
 
+  let url = item.audioUrl || null;
   let success = false;
 
-  if (selectedVoice) {
-    success = await speakWithElevenLabs(text, {
-      suppressResume: true
-    });
+  try {
+    // Se o áudio já foi preparado enquanto a frase anterior tocava,
+    // a troca acontece praticamente sem espera.
+    if (!url && item.audioPromise) {
+      url = await item.audioPromise;
+    }
+
+    if (!url && selectedVoice) {
+      url = await fetchElevenLabsAudio(item.text, token);
+    }
+
+    if (url && token === voiceSpeechToken) {
+      const audio = new Audio(url);
+      audio.preload = "auto";
+      audio.volume = 1;
+      elevenLabsAudio = audio;
+
+      success = await new Promise(function(resolve) {
+        let settled = false;
+
+        const finish = function(ok) {
+          if (settled) return;
+          settled = true;
+
+          try { URL.revokeObjectURL(url); } catch (error) {}
+          if (elevenLabsAudio === audio) elevenLabsAudio = null;
+
+          resolve(ok);
+        };
+
+        audio.onended = function() {
+          finish(true);
+        };
+
+        audio.onerror = function() {
+          finish(false);
+        };
+
+        audio.play().catch(function() {
+          finish(false);
+        });
+      });
+    }
+  } catch (error) {
+    console.error("Erro na fila de voz:", error);
   }
 
   if (
@@ -559,7 +629,7 @@ async function processVoiceSpeechQueue() {
     window.NEXAVoiceMode?.isActive?.()
   ) {
     await new Promise(function(resolve) {
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(item.text);
       utterance.lang = "pt-BR";
       utterance.rate = 1.02;
       utterance.pitch = 1;
@@ -575,11 +645,50 @@ async function processVoiceSpeechQueue() {
   voiceSpeechRunning = false;
 
   if (voiceSpeechQueue.length) {
+    // Começa a próxima frase imediatamente. Ela pode já ter áudio
+    // pré-carregado em segundo plano.
     processVoiceSpeechQueue();
   } else if (!voiceStreamActive) {
     window.NEXAVoiceMode.resumeListening();
   }
 }
+
+function prefetchVoiceQueue() {
+  if (
+    !speechEnabled ||
+    !selectedVoice ||
+    !window.NEXAVoiceMode?.isActive?.() ||
+    !voiceSpeechQueue.length
+  ) {
+    return;
+  }
+
+  const token = voiceSpeechToken;
+
+  // Pré-carrega até duas frases futuras. O áudio da próxima frase
+  // fica pronto enquanto a atual está sendo reproduzida.
+  voiceSpeechQueue.slice(0, 2).forEach(function(item) {
+    if (item.audioPromise || item.audioUrl) return;
+
+    item.audioPromise = fetchElevenLabsAudio(item.text, token)
+      .then(function(url) {
+        if (token !== voiceSpeechToken) {
+          if (url) {
+            try { URL.revokeObjectURL(url); } catch (error) {}
+          }
+          return null;
+        }
+
+        item.audioUrl = url;
+        return url;
+      })
+      .catch(function(error) {
+        console.error("Erro ao pré-carregar fala:", error);
+        return null;
+      });
+  });
+}
+
 
 function feedVoiceSpeechStream(text) {
   if (!window.NEXAVoiceMode?.isActive?.() || !speechEnabled) return;
