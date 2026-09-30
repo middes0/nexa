@@ -867,7 +867,7 @@ function getThinkingConfig(mode) {
   };
 }
 
-function createModelRequest(model, apiKey, messages, memories, signal, mode, useWebSearch) {
+function createModelRequest(model, apiKey, messages, memories, signal, mode, useWebSearch, imageContext) {
   const groqMessages = [];
 
   groqMessages.push({
@@ -896,13 +896,37 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode, use
   for (const message of messages) {
     if (!message || !message.content) continue;
 
-    groqMessages.push({
-      role:
-        message.role === "assistant"
-          ? "assistant"
-          : "user",
-      content: String(message.content)
-    });
+    const isLastUserMessage =
+      message.role !== "assistant" &&
+      message === messages.slice().reverse().find(function(item) {
+        return item.role !== "assistant";
+      });
+
+    if (isLastUserMessage && imageContext) {
+      groqMessages.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: String(message.content)
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: imageContext
+            }
+          }
+        ]
+      });
+    } else {
+      groqMessages.push({
+        role:
+          message.role === "assistant"
+            ? "assistant"
+            : "user",
+        content: String(message.content)
+      });
+    }
   }
 
   const body = {
@@ -1540,7 +1564,7 @@ export async function onRequestPost(context) {
         ?.content ||
       "";
 
-    const messages = incomingMessages.slice(-8);
+    const messages = incomingMessages.slice(-8);\n\n    const imageContext =\n      typeof body?.imageContext === "string" &&\n      /^data:image\\/(png|jpe?g|webp);base64,/i.test(body.imageContext) &&\n      body.imageContext.length <= 16 * 1024 * 1024\n        ? body.imageContext\n        : "";
 
     if (!messages.length) {
       return jsonResponse(
@@ -1617,7 +1641,8 @@ export async function onRequestPost(context) {
         memories,
         controller.signal,
         mode,
-        shouldUseWebSearch(userMessage)
+        shouldUseWebSearch(userMessage),
+        imageContext
       );
 
       const result = await waitForFirstText(
@@ -1650,7 +1675,8 @@ export async function onRequestPost(context) {
           memories,
           null,
           mode,
-          shouldUseWebSearch(userMessage)
+          shouldUseWebSearch(userMessage),
+          imageContext
         );
 
         const result = await waitForFirstText(
