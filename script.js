@@ -2084,20 +2084,24 @@ composer.addEventListener(
     }
 
     if (window.NEXAAutomation?.handle) {
-      const automation = await window.NEXAAutomation.handle(text);
+      try {
+        const automation = await window.NEXAAutomation.handle(text);
 
-      if (automation?.handled) {
-        addMessage(automation.reply, "nexa");
-        saveActiveConversation();
+        if (automation?.handled) {
+          addMessage(automation.reply, "nexa");
+          saveActiveConversation();
 
-        sendButton.disabled = false;
-        micButton.disabled = false;
-        newChatButton.disabled = false;
-        modeButton.disabled = false;
-        wakeCommandMode = false;
-        scheduleWakeRestart();
-        input.focus();
-        return;
+          sendButton.disabled = false;
+          micButton.disabled = false;
+          newChatButton.disabled = false;
+          modeButton.disabled = false;
+          wakeCommandMode = false;
+          scheduleWakeRestart();
+          input.focus();
+          return;
+        }
+      } catch (automationError) {
+        console.error("NEXA automation error:", automationError);
       }
     }
 
