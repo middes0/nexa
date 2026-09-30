@@ -82,20 +82,57 @@ async function saveMemory(env, userId, memory) {
   if (!normalized) return;
 
   try {
-    const existing = await env.DB
-      .prepare(
-        "SELECT id FROM memories WHERE user_id = ? AND lower(memory) = lower(?) LIMIT 1"
-      )
-      .bind(userId, normalized)
+    const result = await env.DB
+      .prepare("SELECT id, memory FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 50")
+      .bind(userId)
+      .all();
+
+    const existing = (result.results || []).find(function(row) {
+      return row.memory.toLowerCase() === normalized.toLowerCase();
+    });
+
+    if (existing) return existing.id;
+
+    const inserted = await env.DB
+      .prepare("INSERT INTO memories (user_id, memory, created_at) VALUES (?, ?, CURRENT_TIMESTAMP) RETURNING id")
+      .bind(userId, normalized.slice(0, 500))
       .first();
 
-    if (existing) return;
+    return inserted?.id || null;
+  } catch (error) {
+    return null;
+  }
+}
 
+async function updateMemory(env, userId, memoryId, memory) {
+  if (!env.DB || !userId || !Number.isInteger(memoryId) || !memory) return false;
+
+  const normalized = String(memory).replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!normalized) return false;
+
+  try {
     await env.DB
-      .prepare("INSERT INTO memories (user_id, memory, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
-      .bind(userId, normalized.slice(0, 500))
+      .prepare("UPDATE memories SET memory = ?, created_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?")
+      .bind(normalized, memoryId, userId)
       .run();
-  } catch (error) {}
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function findMemoryId(env, userId, memory) {
+  if (!env.DB || !userId || !memory) return null;
+
+  try {
+    const result = await env.DB
+      .prepare("SELECT id FROM memories WHERE user_id = ? AND lower(memory) = lower(?) LIMIT 1")
+      .bind(userId, memory)
+      .first();
+    return result?.id || null;
+  } catch (error) {
+    return null;
+  }
 }
 
 async function getMemoryList(env, userId) {
@@ -229,10 +266,66 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
       memory.length < 300 &&
       !/[<>]/.test(memory)
     ) {
-      await saveMemory(env, userId, memory);
+      const memories = await getMemoryList(env, userId);
+      const exact = memories.find(function(item) {
+        return item.memory.toLowerCase() === memory.toLowerCase();
+      });
+
+      if (!exact) {
+        const sameSubject = memories.find(function(item) {
+          const oldText = item.memory.toLowerCase();
+          const newText = memory.toLowerCase();
+          const words = newText.split(/\s+/).filter(function(word) {
+            return word.length >= 5;
+          });
+          return words.length >= 2 && words.filter(function(word) {
+            return oldText.includes(word);
+          }).length >= 2;
+        });
+
+        if (sameSubject) {
+          await updateMemory(env, userId, sameSubject.id, memory);
+        } else {
+          await saveMemory(env, userId, memory);
+        }
+      }
+
       await cleanMemory(env, userId);
     }
   } catch (error) {}
+}
+
+async function forgetMemoryByText(env, userId, query) {
+  if (!env.DB || !userId || !query) return false;
+
+  try {
+    const result = await env.DB
+      .prepare("SELECT id, memory FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 50")
+      .bind(userId)
+      .all();
+
+    const terms = query.toLowerCase().split(/\s+/).filter(function(word) {
+      return word.length >= 4 && !["sobre", "isso", "essa", "este", "esta", "memória", "memoria"].includes(word);
+    });
+
+    const match = (result.results || []).find(function(row) {
+      const text = row.memory.toLowerCase();
+      return terms.length && terms.filter(function(term) {
+        return text.includes(term);
+      }).length >= Math.max(1, Math.ceil(terms.length * 0.5));
+    });
+
+    if (!match) return false;
+
+    await deleteMemory(env, userId, match.id);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function shouldForgetMemory(message) {
+  return /\b(esquece|esquecer|apaga|apague|remove|remova)\b.*\b(memória|memoria|isso|essa|aquilo)\b/i.test(message || "");
 }
 
 function buildContents(messages, memories) {
@@ -1133,6 +1226,21 @@ export async function onRequestPost(context) {
         },
         400
       );
+    }
+
+    if (shouldForgetMemory(userMessage)) {
+      const query = userMessage
+        .replace(/\b(esquece|esquecer|apaga|apague|remove|remova)\b/ig, "")
+        .replace(/\b(memória|memoria)\b/ig, "")
+        .trim();
+
+      const removed = await forgetMemoryByText(env, userId, query);
+
+      return createCalculatorResponse({
+        result: removed
+          ? "Beleza. Apaguei essa memória."
+          : "Não encontrei uma memória correspondente para apagar."
+      });
     }
 
     const calculatorResult = runCalculatorTool(userMessage);
