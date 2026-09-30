@@ -101,7 +101,7 @@ function parseNexaReminder(text) {
   }
 
   const relative = normalized.match(
-    /(?:daqui\s+a|em)\s+(\d+(?:[.,]\d+)?)\s*(segundos?|seg|s|minutos?|min|m|horas?|h|dias?|d)\b/
+    /(?:daqui\s+a|depois\s+de|em)\s+(\d+(?:[.,]\d+)?)\s*(segundos?|seg|s|minutos?|min|m|horas?|h|dias?|d)\b/
   );
 
   if (relative) {
@@ -119,7 +119,7 @@ function parseNexaReminder(text) {
       type: "reminder",
       text: cleanReminderText(
         normalized.replace(
-          /(?:daqui\s+a|em)\s+\d+(?:[.,]\d+)?\s*(?:segundos?|seg|s|minutos?|min|m|horas?|h|dias?|d)\b/i,
+          /(?:daqui\s+a|depois\s+de|em)\s+\d+(?:[.,]\d+)?\s*(?:segundos?|seg|s|minutos?|min|m|horas?|h|dias?|d)\b/i,
           ""
         )
       ).slice(0, 300),
