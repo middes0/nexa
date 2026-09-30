@@ -81,7 +81,7 @@ function parseClock(text) {
 function cleanReminderText(text) {
   let reminder = normalizeNexaText(text)
     .replace(/^(?:nexa[,:]?\s*)?/, "")
-    .replace(/^(?:me\s+)?lembre(?:-me)?\s*/i, "")
+    .replace(/^(?:me\s+)?(?:lembre(?:-me)?|lembra(?:-me)?|avisa(?:-me)?|avise(?:-me)?|notifica(?:-me)?|notifique(?:-me)?)\s*/i, "")
     .replace(/^(?:que|de)\s+/i, "")
     .replace(/^[,.:;!?\s]+|[,.:;!?\s]+$/g, "")
     .replace(/^eu\s+(?:tenho|vou|preciso)\s+/i, "")
@@ -96,7 +96,11 @@ function cleanReminderText(text) {
 function parseNexaReminder(text) {
   const normalized = normalizeNexaText(text);
 
-  if (!/(?:me\s+)?lembre|lembra|lembrar/.test(normalized)) {
+  const reminderIntent =
+    /(?:me\s+)?(?:lembre(?:-me)?|lembra(?:-me)?|lembrar|avisa(?:-me)?|avise(?:-me)?|notifica(?:-me)?|notifique(?:-me)?)/.test(normalized) ||
+    /\b(?:alarme|lembrete)\b/.test(normalized);
+
+  if (!reminderIntent) {
     return null;
   }
 
