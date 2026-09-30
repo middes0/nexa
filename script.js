@@ -117,6 +117,7 @@ updateModeUI();
 
 let selectedImageData = "";
 let selectedImageName = "";
+let conversationImageData = "";
 
 function clearSelectedImage() {
   selectedImageData = "";
@@ -196,6 +197,8 @@ async function selectImage(file) {
 
     selectedImageData = result.dataUrl;
     selectedImageName = result.name;
+    conversationImageData = result.dataUrl;
+    saveActiveConversation();
 
     if (imagePreview) {
       imagePreview.classList.add("open");
@@ -999,6 +1002,8 @@ function startNewConversation() {
   }
 
   history.length = 0;
+  conversationImageData = "";
+  clearSelectedImage();
 
   const fresh = createConversation();
 
@@ -2150,9 +2155,13 @@ if (activeConversationId) {
     return item.id === activeConversationId;
   });
 
-  if (active && Array.isArray(active.messages) && active.messages.length) {
+  if (active) {
+    conversationImageData = typeof active.imageData === "string" ? active.imageData : "";
+
+    if (active.messages && Array.isArray(active.messages) && active.messages.length) {
     history.length = 0;
-    history.push(...active.messages);
+      history.push(...active.messages);
+    }
   }
 }
 
