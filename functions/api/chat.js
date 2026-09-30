@@ -1,4 +1,4 @@
-const PRIMARY_MODEL = "gemini-3-flash-preview";
+const PRIMARY_MODEL = "gemini-3.6-flash";
 const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
 const SYSTEM_PROMPT = [
