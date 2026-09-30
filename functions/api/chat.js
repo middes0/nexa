@@ -454,7 +454,8 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode) {
           parts: [{ text: SYSTEM_PROMPT }]
         },
         contents: buildContents(messages, memories),
-        generationConfig
+        generationConfig,
+        tools: [{ google_search: {} }]
       })
     }
   );
@@ -720,7 +721,8 @@ async function createFallbackResponse(
           parts: [{ text: SYSTEM_PROMPT }]
         },
         contents: buildContents(messages, memories),
-        generationConfig
+        generationConfig,
+        tools: [{ google_search: {} }]
       })
     }
   );
