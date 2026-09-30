@@ -252,6 +252,14 @@ let availableVoices = [];
 let elevenLabsAudio = null;
 let elevenLabsRequestId = 0;
 
+// Fila de fala do modo de voz.
+// As frases entram enquanto a resposta do modelo ainda está sendo gerada,
+// reduzindo pausas entre "pensar" e "falar".
+let voiceSpeechQueue = [];
+let voiceSpeechRunning = false;
+let voiceSpeechToken = 0;
+let voiceStreamPending = "";
+
 async function loadNexaVoice() {
   if (!voiceList) return;
 
@@ -419,9 +427,11 @@ function renderVoiceList() {
   });
 }
 
-async function speakWithElevenLabs(text) {
+async function speakWithElevenLabs(text, options) {
   if (!selectedVoice || !text) return false;
 
+  const settings = options || {};
+  const suppressResume = Boolean(settings.suppressResume);
   const requestId = ++elevenLabsRequestId;
 
   try {
@@ -433,7 +443,7 @@ async function speakWithElevenLabs(text) {
       body: JSON.stringify({
         action: "elevenlabs_tts",
         voiceId: selectedVoice.id,
-        text: text.slice(0, 5000),
+        text: text.slice(0, 1800),
         userId
       })
     });
@@ -454,34 +464,29 @@ async function speakWithElevenLabs(text) {
 
     if (elevenLabsAudio) {
       elevenLabsAudio.pause();
-      URL.revokeObjectURL(elevenLabsAudio.src);
+      try { URL.revokeObjectURL(elevenLabsAudio.src); } catch (error) {}
     }
 
     const url = URL.createObjectURL(blob);
     elevenLabsAudio = new Audio(url);
+    elevenLabsAudio.preload = "auto";
     elevenLabsAudio.volume = 1;
 
-    elevenLabsAudio.onended = function() {
-      URL.revokeObjectURL(url);
+    const finish = function() {
+      try { URL.revokeObjectURL(url); } catch (error) {}
       elevenLabsAudio = null;
 
-      if (window.NEXAVoiceMode?.isActive?.()) {
-        window.NEXAVoiceMode.resumeListening();
-      } else {
-        scheduleWakeRestart();
+      if (!suppressResume) {
+        if (window.NEXAVoiceMode?.isActive?.()) {
+          window.NEXAVoiceMode.resumeListening();
+        } else {
+          scheduleWakeRestart();
+        }
       }
     };
 
-    elevenLabsAudio.onerror = function() {
-      URL.revokeObjectURL(url);
-      elevenLabsAudio = null;
-
-      if (window.NEXAVoiceMode?.isActive?.()) {
-        window.NEXAVoiceMode.resumeListening();
-      } else {
-        scheduleWakeRestart();
-      }
-    };
+    elevenLabsAudio.onended = finish;
+    elevenLabsAudio.onerror = finish;
 
     await elevenLabsAudio.play();
     return true;
@@ -491,6 +496,123 @@ async function speakWithElevenLabs(text) {
   }
 }
 
+function resetVoiceSpeechQueue() {
+  voiceSpeechToken++;
+  voiceSpeechQueue = [];
+  voiceSpeechRunning = false;
+  voiceStreamPending = "";
+}
+
+function queueVoiceSpeech(text) {
+  const clean = String(text || "")
+    .replace(/[*_\`#]/g, "")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!clean || !speechEnabled || !window.NEXAVoiceMode?.isActive?.()) {
+    return;
+  }
+
+  voiceSpeechQueue.push(clean);
+  processVoiceSpeechQueue();
+}
+
+async function processVoiceSpeechQueue() {
+  if (
+    voiceSpeechRunning ||
+    !voiceSpeechQueue.length ||
+    !speechEnabled ||
+    !window.NEXAVoiceMode?.isActive?.()
+  ) {
+    if (
+      !voiceSpeechRunning &&
+      !voiceSpeechQueue.length &&
+      window.NEXAVoiceMode?.isActive?.()
+    ) {
+      window.NEXAVoiceMode.resumeListening();
+    }
+    return;
+  }
+
+  voiceSpeechRunning = true;
+  const token = voiceSpeechToken;
+  const text = voiceSpeechQueue.shift();
+
+  window.NEXAVoiceMode.setSpeaking();
+
+  let success = false;
+
+  if (selectedVoice) {
+    success = await speakWithElevenLabs(text, {
+      suppressResume: true
+    });
+  }
+
+  if (
+    !success &&
+    "speechSynthesis" in window &&
+    token === voiceSpeechToken &&
+    window.NEXAVoiceMode?.isActive?.()
+  ) {
+    await new Promise(function(resolve) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "pt-BR";
+      utterance.rate = 1.02;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      utterance.onend = resolve;
+      utterance.onerror = resolve;
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
+  if (token !== voiceSpeechToken) return;
+
+  voiceSpeechRunning = false;
+
+  if (voiceSpeechQueue.length) {
+    processVoiceSpeechQueue();
+  } else {
+    window.NEXAVoiceMode.resumeListening();
+  }
+}
+
+function feedVoiceSpeechStream(text) {
+  if (!window.NEXAVoiceMode?.isActive?.() || !speechEnabled) return;
+
+  voiceStreamPending += String(text || "");
+
+  // Só envia frases completas para o TTS. Assim a primeira frase pode
+  // começar a tocar enquanto o restante da resposta ainda está chegando.
+  while (true) {
+    const match = voiceStreamPending.match(
+      /^(.+?[.!?](?:["'”»])?)(?:\s+|$)/
+    );
+
+    if (!match) break;
+
+    const sentence = match[1].trim();
+    voiceStreamPending = voiceStreamPending.slice(match[0].length).trimStart();
+
+    if (sentence) {
+      queueVoiceSpeech(sentence);
+    }
+  }
+}
+
+function finishVoiceSpeechStream() {
+  if (!window.NEXAVoiceMode?.isActive?.()) return;
+
+  const remaining = voiceStreamPending.trim();
+  voiceStreamPending = "";
+
+  if (remaining) {
+    queueVoiceSpeech(remaining);
+  } else if (!voiceSpeechRunning && !voiceSpeechQueue.length) {
+    window.NEXAVoiceMode.resumeListening();
+  }
+}
 async function testNexaVoice() {
   if (!selectedVoice) return;
 
@@ -533,6 +655,10 @@ function closeVoicePanel() {
 
 function stopNexaSpeech() {
   elevenLabsRequestId++;
+  voiceSpeechToken++;
+  voiceSpeechQueue = [];
+  voiceSpeechRunning = false;
+  voiceStreamPending = "";
 
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -576,8 +702,14 @@ function updateSpeechButton() {
 function speakNexa(text) {
   if (!speechEnabled || !text) return;
 
+  // No modo de voz, a fala é alimentada durante o streaming.
+  // O fallback aqui evita duplicação caso uma resposta não tenha sido
+  // processada pelo fluxo de streaming.
   if (window.NEXAVoiceMode?.isActive?.()) {
-    window.NEXAVoiceMode.setSpeaking();
+    if (!voiceSpeechRunning && !voiceSpeechQueue.length && !voiceStreamPending) {
+      queueVoiceSpeech(text);
+    }
+    return;
   }
 
   if ("speechSynthesis" in window) {
@@ -1847,6 +1979,10 @@ async function askNexa(text) {
           paragraph,
           fullReply
         );
+
+        if (window.NEXAVoiceMode?.isActive?.()) {
+          feedVoiceSpeechStream(data.text);
+        }
       }
 
       if (data.type === "done") {
@@ -1917,7 +2053,11 @@ async function askNexa(text) {
     previousUser?.content || text
   );
 
-  speakNexa(fullReply);
+  if (window.NEXAVoiceMode?.isActive?.()) {
+    finishVoiceSpeechStream();
+  } else {
+    speakNexa(fullReply);
+  }
 
   return {
     reply: fullReply,
@@ -2735,6 +2875,7 @@ restoreSavedNexaVoice();
     overlay?.classList.add("open");
 
     stopNexaSpeech();
+    resetVoiceSpeechQueue();
 
     setState(
       "",
@@ -2763,6 +2904,7 @@ restoreSavedNexaVoice();
     recognitionEnded = true;
 
     stopNexaSpeech();
+    resetVoiceSpeechQueue();
 
     panel.classList.remove("open", "listening", "thinking", "speaking");
     panel.setAttribute("aria-hidden", "true");
