@@ -3,6 +3,9 @@ const input = document.getElementById("messageInput");
 const chat = document.getElementById("chat");
 const micButton = document.getElementById("micButton");
 const sendButton = composer.querySelector('button[type="submit"]');
+const imageButton = document.getElementById("imageButton");
+const imageInput = document.getElementById("imageInput");
+const imagePreview = document.getElementById("imagePreview");
 const newChatButton = document.getElementById("newChatButton");
 const historyButton = document.getElementById("historyButton");
 const historyPanel = document.getElementById("historyPanel");
@@ -110,6 +113,130 @@ document.addEventListener("click", function(event) {
 });
 
 updateModeUI();
+
+
+let selectedImageData = "";
+let selectedImageName = "";
+
+function clearSelectedImage() {
+  selectedImageData = "";
+  selectedImageName = "";
+
+  if (imageInput) imageInput.value = "";
+
+  if (imagePreview) {
+    imagePreview.classList.remove("open");
+    imagePreview.innerHTML = "";
+  }
+}
+
+function prepareImage(file) {
+  return new Promise(function(resolve, reject) {
+    if (!file || !file.type.startsWith("image/")) {
+      reject(new Error("Escolha uma imagem válida."));
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      reject(new Error("Essa imagem é grande demais. Escolha uma de até 15 MB."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function() {
+      const image = new Image();
+
+      image.onload = function() {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
+        if (dataUrl.length > 16 * 1024 * 1024) {
+          reject(new Error("Não consegui reduzir essa imagem o suficiente."));
+          return;
+        }
+
+        resolve({
+          dataUrl,
+          name: file.name,
+          width,
+          height
+        });
+      };
+
+      image.onerror = function() {
+        reject(new Error("Não consegui ler essa imagem."));
+      };
+
+      image.src = reader.result;
+    };
+
+    reader.onerror = function() {
+      reject(new Error("Não consegui carregar a imagem."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+async function selectImage(file) {
+  try {
+    const result = await prepareImage(file);
+
+    selectedImageData = result.dataUrl;
+    selectedImageName = result.name;
+
+    if (imagePreview) {
+      imagePreview.classList.add("open");
+      imagePreview.innerHTML = "";
+
+      const thumb = document.createElement("img");
+      thumb.src = result.dataUrl;
+      thumb.alt = "Imagem selecionada";
+
+      const info = document.createElement("span");
+      info.textContent = result.name;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = "Remover imagem";
+      remove.setAttribute("aria-label", "Remover imagem");
+      remove.addEventListener("click", clearSelectedImage);
+
+      imagePreview.appendChild(thumb);
+      imagePreview.appendChild(info);
+      imagePreview.appendChild(remove);
+    }
+
+    input.focus();
+  } catch (error) {
+    clearSelectedImage();
+    addMessage(error?.message || "Não consegui carregar essa imagem.", "nexa");
+  }
+}
+
+if (imageButton && imageInput) {
+  imageButton.addEventListener("click", function() {
+    imageInput.click();
+  });
+
+  imageInput.addEventListener("change", function() {
+    const file = imageInput.files?.[0];
+    if (file) selectImage(file);
+  });
+}
 
 /* =========================
    VOZ DA NEXA
@@ -1438,6 +1565,111 @@ function updateStreamingMessage(paragraph, text) {
    STREAMING DA NEXA
 ========================= */
 
+
+async function askNexaWithImage(text, imageData) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "analyze_image",
+      message: text || "Analise esta imagem.",
+      image: imageData,
+      userId
+    })
+  });
+
+  if (!response.ok) {
+    let data = null;
+
+    try {
+      data = await response.json();
+    } catch {}
+
+    throw new Error(
+      data?.error || `Erro na análise da imagem (HTTP ${response.status}).`
+    );
+  }
+
+  if (!response.body) {
+    throw new Error("O navegador não conseguiu iniciar a análise da imagem.");
+  }
+
+  hideTyping();
+
+  const streamingMessage = createStreamingMessage();
+  const paragraph = streamingMessage.paragraph;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = "";
+  let fullReply = "";
+
+  function processEvent(event) {
+    event.split(/\r?\n/).forEach(function(line) {
+      if (!line.startsWith("data:")) return;
+
+      const raw = line.slice(5).trim();
+      if (!raw) return;
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return;
+      }
+
+      if (data.type === "text" && typeof data.text === "string") {
+        fullReply += data.text;
+        updateStreamingMessage(paragraph, fullReply);
+      }
+
+      if (data.type === "error") {
+        throw new Error(data.error || "Erro durante a análise da imagem.");
+      }
+    });
+  }
+
+  while (true) {
+    const result = await reader.read();
+    if (result.done) break;
+
+    buffer += decoder.decode(result.value, { stream: true });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() || "";
+    events.forEach(processEvent);
+  }
+
+  if (buffer.trim()) processEvent(buffer);
+
+  if (!fullReply.trim()) {
+    throw new Error("A NEXA não conseguiu analisar essa imagem.");
+  }
+
+  renderMessageContent(streamingMessage.message, fullReply);
+
+  history.push({
+    role: "user",
+    content: text || "Analisei uma imagem."
+  });
+
+  history.push({
+    role: "model",
+    content: fullReply
+  });
+
+  saveMemory();
+  addResponseActions(
+    streamingMessage.message,
+    fullReply,
+    text || "Analisei uma imagem."
+  );
+  speakNexa(fullReply);
+
+  return fullReply;
+}
+
 async function askNexa(text) {
   const response = await fetch(API_URL, {
     method: "POST",
@@ -1786,7 +2018,12 @@ composer.addEventListener(
     showTyping();
 
     try {
-      await askNexa(text);
+      if (selectedImageData) {
+        await askNexaWithImage(text, selectedImageData);
+        clearSelectedImage();
+      } else {
+        await askNexa(text);
+      }
     } catch (error) {
       console.error("NEXA error:", error);
 
