@@ -214,7 +214,12 @@ function getThinkingConfig(mode) {
 
 function createModelRequest(model, apiKey, messages, memories, signal, mode) {
   const generationConfig = {
-    maxOutputTokens: mode === "maximum" ? 320 : 220
+    maxOutputTokens:
+      mode === "maximum"
+        ? 1024
+        : mode === "high"
+          ? 768
+          : 512
   };
 
   if (model === PRIMARY_MODEL) {
@@ -440,7 +445,12 @@ async function createFallbackResponse(
   mode
 ) {
   const generationConfig = {
-    maxOutputTokens: mode === "maximum" ? 320 : 220,
+    maxOutputTokens:
+      mode === "maximum"
+        ? 1024
+        : mode === "high"
+          ? 768
+          : 512,
     thinkingConfig: getThinkingConfig(mode)
   };
 
@@ -684,8 +694,8 @@ export async function onRequestPost(context) {
 
       try {
         const response = await createModelRequest(
-          "gemma-4-31b-it",
-          env.GEMMA_4_31B,
+          FALLBACK_MODEL,
+          env.GEMINI_API_KEY,
           messages,
           memories,
           null,
@@ -694,7 +704,7 @@ export async function onRequestPost(context) {
 
         const result = await waitForFirstText(
           response,
-          "gemma-4-31b-it"
+          FALLBACK_MODEL
         );
 
         return createClientStream(
@@ -706,7 +716,7 @@ export async function onRequestPost(context) {
           userId,
           userMessage,
           context,
-          "gemma-4-31b-it"
+          FALLBACK_MODEL
         );
       } catch (gemmaError) {
         return jsonResponse(
