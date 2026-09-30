@@ -1000,6 +1000,43 @@ document.addEventListener("keydown", function(event) {
    ENVIO
 ========================= */
 
+function handleNaturalLocalCommand(text) {
+  const normalized = String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (/^(nexa[,:]?\s*)?(abre|abrir|mostra|mostrar|veja|ver)\s+(meu\s+)?historico$/.test(normalized) ||
+      /^(nexa[,:]?\s*)?(historico|conversas)$/.test(normalized)) {
+    openHistoryPanel();
+    return "done";
+  }
+
+  if (/^(nexa[,:]?\s*)?(abre|abrir|mostra|mostrar|veja|ver)\s+(minhas\s+)?memorias$/.test(normalized) ||
+      /^(nexa[,:]?\s*)?(memorias)$/.test(normalized)) {
+    openMemoryPanel();
+    return "done";
+  }
+
+  if (/^(nexa[,:]?\s*)?(nova\s+conversa|nova\s+conversa\s+agora|comecar\s+de\s+novo)$/.test(normalized)) {
+    startNewConversation();
+    return "done";
+  }
+
+  if (/^(nexa[,:]?\s*)?(fecha|feche|fechar)\s+(o\s+)?(historico|painel)$/.test(normalized)) {
+    closeHistoryPanel();
+    return "done";
+  }
+
+  if (/^(nexa[,:]?\s*)?(fecha|feche|fechar)\s+(o\s+)?(memorias|painel)$/.test(normalized)) {
+    closeMemoryPanel();
+    return "done";
+  }
+
+  return null;
+}
+
 composer.addEventListener(
   "submit",
   async function(event) {
@@ -1013,8 +1050,19 @@ composer.addEventListener(
       window.speechSynthesis.cancel();
     }
 
+    const localCommand = handleNaturalLocalCommand(text);
+
     addMessage(text, "user");
     input.value = "";
+
+    if (localCommand === "done") {
+      sendButton.disabled = false;
+      micButton.disabled = false;
+      newChatButton.disabled = false;
+      modeButton.disabled = false;
+      input.focus();
+      return;
+    }
 
     sendButton.disabled = true;
     micButton.disabled = true;
