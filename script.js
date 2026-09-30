@@ -9,6 +9,12 @@ const historyPanel = document.getElementById("historyPanel");
 const historyList = document.getElementById("historyList");
 const closeHistoryButton = document.getElementById("closeHistoryButton");
 const historyOverlay = document.getElementById("historyOverlay");
+const memoryButton = document.getElementById("memoryButton");
+const memoryPanel = document.getElementById("memoryPanel");
+const memoryList = document.getElementById("memoryList");
+const closeMemoryButton = document.getElementById("closeMemoryButton");
+const clearMemoriesButton = document.getElementById("clearMemoriesButton");
+const memoryOverlay = document.getElementById("memoryOverlay");
 const modeButton = document.getElementById("modeButton");
 const modeMenu = document.getElementById("modeMenu");
 
@@ -490,6 +496,159 @@ function loadMemory() {
   }
 }
 
+
+/* =========================
+   MEMÓRIAS DE VERDADE
+========================= */
+
+async function requestMemories(action, memoryId) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      action,
+      memoryId,
+      userId
+    })
+  });
+
+  if (!response.ok) {
+    let data = null;
+
+    try {
+      data = await response.json();
+    } catch {}
+
+    throw new Error(
+      data?.error || `Erro ao acessar memórias (HTTP ${response.status}).`
+    );
+  }
+
+  return response.json();
+}
+
+function renderMemories(memories) {
+  if (!memoryList) return;
+
+  memoryList.innerHTML = "";
+
+  if (!Array.isArray(memories) || !memories.length) {
+    const empty = document.createElement("div");
+    empty.className = "memory-empty";
+
+    const icon = document.createElement("span");
+    icon.className = "memory-empty-icon";
+    icon.textContent = "◈";
+
+    const title = document.createElement("strong");
+    title.textContent = "Ainda não há memórias";
+
+    const text = document.createElement("p");
+    text.textContent = "Conforme você conversa comigo, informações úteis sobre você podem ser lembradas automaticamente.";
+
+    empty.appendChild(icon);
+    empty.appendChild(title);
+    empty.appendChild(text);
+    memoryList.appendChild(empty);
+    return;
+  }
+
+  memories.forEach(function(memory) {
+    const item = document.createElement("div");
+    item.className = "memory-item";
+
+    const body = document.createElement("div");
+    body.className = "memory-item-body";
+
+    const icon = document.createElement("span");
+    icon.className = "memory-item-icon";
+    icon.textContent = "◈";
+
+    const text = document.createElement("p");
+    text.textContent = memory.memory;
+
+    body.appendChild(icon);
+    body.appendChild(text);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "memory-delete";
+    deleteButton.textContent = "×";
+    deleteButton.title = "Esquecer esta memória";
+    deleteButton.setAttribute("aria-label", "Esquecer esta memória");
+
+    deleteButton.addEventListener("click", async function() {
+      deleteButton.disabled = true;
+
+      try {
+        const data = await requestMemories("delete_memory", Number(memory.id));
+        renderMemories(data.memories);
+      } catch (error) {
+        deleteButton.disabled = false;
+        console.error("Erro ao apagar memória:", error);
+      }
+    });
+
+    item.appendChild(body);
+    item.appendChild(deleteButton);
+    memoryList.appendChild(item);
+  });
+}
+
+async function loadMemories() {
+  if (!memoryList) return;
+
+  memoryList.innerHTML = `<div class="memory-loading">Carregando memórias...</div>`;
+
+  try {
+    const data = await requestMemories("get_memories");
+    renderMemories(data.memories);
+  } catch (error) {
+    memoryList.innerHTML = `<div class="memory-error">Não consegui carregar as memórias.</div>`;
+    console.error("Erro ao carregar memórias:", error);
+  }
+}
+
+async function openMemoryPanel() {
+  if (!memoryPanel) return;
+
+  loadMemories();
+  memoryPanel.classList.add("open");
+  memoryOverlay.classList.add("open");
+  document.body.classList.add("memory-open");
+}
+
+function closeMemoryPanel() {
+  if (!memoryPanel) return;
+
+  memoryPanel.classList.remove("open");
+  memoryOverlay.classList.remove("open");
+  document.body.classList.remove("memory-open");
+}
+
+async function clearAllMemories() {
+  if (!clearMemoriesButton) return;
+
+  const confirmed = window.confirm(
+    "Apagar todas as memórias da NEXA?"
+  );
+
+  if (!confirmed) return;
+
+  clearMemoriesButton.disabled = true;
+
+  try {
+    const data = await requestMemories("clear_memories");
+    renderMemories(data.memories);
+  } catch (error) {
+    console.error("Erro ao apagar memórias:", error);
+  } finally {
+    clearMemoriesButton.disabled = false;
+  }
+}
+
 /* =========================
    MENSAGENS
 ========================= */
@@ -811,9 +970,29 @@ if (historyOverlay) {
   historyOverlay.addEventListener("click", closeHistoryPanel);
 }
 
+if (memoryButton) {
+  memoryButton.addEventListener("click", openMemoryPanel);
+}
+
+if (closeMemoryButton) {
+  closeMemoryButton.addEventListener("click", closeMemoryPanel);
+}
+
+if (memoryOverlay) {
+  memoryOverlay.addEventListener("click", closeMemoryPanel);
+}
+
+if (clearMemoriesButton) {
+  clearMemoriesButton.addEventListener("click", clearAllMemories);
+}
+
 document.addEventListener("keydown", function(event) {
   if (event.key === "Escape" && historyPanel.classList.contains("open")) {
     closeHistoryPanel();
+  }
+
+  if (event.key === "Escape" && memoryPanel.classList.contains("open")) {
+    closeMemoryPanel();
   }
 });
 
