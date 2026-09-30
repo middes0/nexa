@@ -583,6 +583,35 @@ function getUserId() {
 
 const userId = getUserId();
 
+async function restoreSavedNexaVoice() {
+  const savedVoiceId = localStorage.getItem(VOICE_KEY);
+  if (!savedVoiceId) return;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "elevenlabs_voices",
+        userId
+      })
+    });
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    availableVoices = Array.isArray(data.voices) ? data.voices : [];
+
+    const voices = getDistinctElevenVoices();
+    selectedVoice =
+      voices.find(function(voice) {
+        return voice.id === savedVoiceId;
+      }) || null;
+  } catch (error) {
+    console.error("Erro ao restaurar voz da NEXA:", error);
+  }
+}
+
 /* =========================
    MEMÓRIA LOCAL
 ========================= */
@@ -1156,6 +1185,23 @@ function renderWebSources(sources, message) {
   message.appendChild(box);
 }
 
+function addReplayButton(message, text) {
+  if (!message || !text || message.querySelector(".message-replay")) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "message-replay";
+  button.textContent = "🔊";
+  button.title = "Ouvir novamente";
+  button.setAttribute("aria-label", "Ouvir resposta da NEXA");
+
+  button.addEventListener("click", function() {
+    speakNexa(text);
+  });
+
+  message.appendChild(button);
+}
+
 function createStreamingMessage() {
   const message = document.createElement("div");
   message.className = "message nexa";
@@ -1316,6 +1362,7 @@ async function askNexa(text) {
   });
 
   saveMemory();
+  addReplayButton(streamingMessage.message, fullReply);
   speakNexa(fullReply);
 
   return {
@@ -1618,6 +1665,11 @@ function restoreConversation() {
       item.content,
       item.role === "user" ? "user" : "nexa"
     );
+
+    if (item.role !== "user") {
+      const message = chat.lastElementChild;
+      addReplayButton(message, item.content);
+    }
   });
 }
 
@@ -1637,3 +1689,4 @@ if (activeConversationId) {
 
 restoreConversation();
 renderHistory();
+restoreSavedNexaVoice();
