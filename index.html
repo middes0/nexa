@@ -25,11 +25,24 @@
 
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
+        <button type="button" id="historyButton" class="history-button" aria-label="Abrir histórico" title="Histórico">☰</button>
         <button type="button" id="newChatButton" class="new-chat-button">
           Nova conversa
         </button>
       </div>
     </header>
+
+    <aside class="history-panel" id="historyPanel" aria-label="Histórico de conversas">
+      <div class="history-header">
+        <div>
+          <strong>Histórico</strong>
+          <span>Suas conversas</span>
+        </div>
+        <button type="button" id="closeHistoryButton" class="history-close" aria-label="Fechar histórico">×</button>
+      </div>
+
+      <div class="history-list" id="historyList"></div>
+    </aside>
 
     <section class="hero">
       <div class="core">
@@ -101,9 +114,9 @@
       <button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button>
     </form>
 
-    <footer>NEXA v0.3 • Gemini conectado via Cloudflare</footer>
+    <footer>NEXA v0.3 • Groq conectado via Cloudflare</footer>
   </main>
 
-  <script src="script.js?v=5"></script>
+  <script src="script.js?v=6"></script>
 </body>
 </html>
