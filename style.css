@@ -2150,3 +2150,29 @@ button:disabled {
   .voice-panel{height:min(520px,calc(100vh - 28px));padding:14px}
   .voice-actions{grid-template-columns:1fr}
 }
+
+
+.message-replay {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 8px;
+  padding: 0;
+  border: 1px solid #2b203d;
+  border-radius: 9px;
+  background: #120d1b;
+  color: #b99cff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.message-replay:hover {
+  background: #21162f;
+  color: #fff;
+  border-color: #8b5cf6;
+}
+
+.message-replay:active {
+  transform: scale(.96);
+}
