@@ -3102,3 +3102,40 @@ restoreSavedNexaVoice();
     "Fale agora. A NEXA já está ouvindo."
   );
 })();
+
+
+/* =========================
+   CONFIGURAÇÕES
+========================= */
+const settingsButton = document.getElementById("settingsButton");
+const settingsPanel = document.getElementById("settingsPanel");
+const settingsOverlay = document.getElementById("settingsOverlay");
+const settingsCloseButton = document.getElementById("settingsCloseButton");
+
+function openNexaSettings() {
+  settingsPanel?.classList.add("open");
+  settingsOverlay?.classList.add("open");
+}
+
+function closeNexaSettings() {
+  settingsPanel?.classList.remove("open");
+  settingsOverlay?.classList.remove("open");
+}
+
+settingsButton?.addEventListener("click", openNexaSettings);
+settingsCloseButton?.addEventListener("click", closeNexaSettings);
+settingsOverlay?.addEventListener("click", closeNexaSettings);
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape" && settingsPanel?.classList.contains("open")) {
+    closeNexaSettings();
+  }
+});
+
+const settingsVoiceItem = document.querySelector(".settings-item:not(.static)");
+settingsVoiceItem?.addEventListener("click", function() {
+  closeNexaSettings();
+  voicePanel?.classList.add("open");
+  voiceOverlay?.classList.add("open");
+  loadNexaVoice();
+});
