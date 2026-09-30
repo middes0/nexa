@@ -68,8 +68,11 @@ const history = [];
 let conversations = [];
 let activeConversationId = null;
 
+const savedResponseMode = localStorage.getItem(MODE_KEY);
 let responseMode =
-  localStorage.getItem(MODE_KEY) || "none";
+  savedResponseMode === "medium"
+    ? "none"
+    : savedResponseMode || "none";
 
 if (!MODE_INFO[responseMode]) {
   responseMode = "medium";
