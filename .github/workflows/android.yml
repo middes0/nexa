@@ -22,13 +22,30 @@ jobs:
       - name: Prepare web assets
         run: |
           mkdir -p www
-          cp index.html style.css script.js www/
+          cp index.html style.css script.js automation.js www/
 
       - name: Create Android project
         run: npx cap add android
 
       - name: Sync web app
-        run: npx cap sync android
+        run: |
+          npx cap sync android
+
+      - name: Enable exact Android alarms
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          permission = '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />'
+
+          if "android.permission.SCHEDULE_EXACT_ALARM" not in text:
+              text = text.replace("<manifest", "<manifest\n" + permission, 1)
+
+          manifest.write_text(text)
+          PY
 
       - name: Setup Java
         uses: actions/setup-java@v4
