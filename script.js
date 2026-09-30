@@ -234,7 +234,6 @@ function getDistinctElevenVoices() {
   const result = [];
 
   availableVoices
-    .filter(isPortugueseElevenVoice)
     .forEach(function(voice) {
       const key = getElevenVoiceFamilyKey(voice);
 
