@@ -3117,3 +3117,26 @@ footer {
   .composer { padding: 8px; border-radius: 15px; }
   .message { padding: 11px 13px; }
 }
+
+
+/* Distinct SVG controls */
+.icon-button {
+  display: inline-grid !important;
+  place-items: center;
+}
+.icon-button svg,
+.composer button svg,
+.voice-mode-mic svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.icon-button:hover svg,
+.composer button:hover svg {
+  transform: scale(1.06);
+}
