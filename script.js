@@ -4,9 +4,8 @@ const chat = document.getElementById("chat");
 const micButton = document.getElementById("micButton");
 const sendButton = composer.querySelector('button[type="submit"]');
 const newChatButton = document.getElementById("newChatButton");
-const modeSelector = document.getElementById("modeSelector");
-const modeValue = document.getElementById("modeValue");
-const modeDescription = document.getElementById("modeDescription");
+const modeButton = document.getElementById("modeButton");
+const modeMenu = document.getElementById("modeMenu");
 
 const MEMORY_KEY = "nexa_conversation";
 const USER_ID_KEY = "nexa_user_id";
@@ -48,20 +47,27 @@ if (!MODE_INFO[responseMode]) {
 function updateModeUI() {
   const info = MODE_INFO[responseMode];
 
-  modeValue.textContent = info.label;
-  modeDescription.textContent = info.description;
+  modeButton.textContent =
+    responseMode === "maximum"
+      ? "MÁX"
+      : info.label.charAt(0).toUpperCase();
 
-  modeSelector
-    .querySelectorAll("button")
-    .forEach(function(button) {
-      button.classList.toggle(
-        "active",
-        button.dataset.mode === responseMode
-      );
-    });
+  modeButton.title = "Modo: " + info.label;
+
+  modeMenu.querySelectorAll("button[data-mode]").forEach(function(button) {
+    button.classList.toggle(
+      "active",
+      button.dataset.mode === responseMode
+    );
+  });
 }
 
-modeSelector.addEventListener("click", function(event) {
+modeButton.addEventListener("click", function(event) {
+  event.stopPropagation();
+  modeMenu.classList.toggle("open");
+});
+
+modeMenu.addEventListener("click", function(event) {
   const button = event.target.closest("button[data-mode]");
 
   if (!button) return;
@@ -69,6 +75,13 @@ modeSelector.addEventListener("click", function(event) {
   responseMode = button.dataset.mode;
   localStorage.setItem(MODE_KEY, responseMode);
   updateModeUI();
+  modeMenu.classList.remove("open");
+});
+
+document.addEventListener("click", function(event) {
+  if (!event.target.closest(".composer-mode")) {
+    modeMenu.classList.remove("open");
+  }
 });
 
 updateModeUI();
@@ -471,9 +484,7 @@ composer.addEventListener(
     sendButton.disabled = true;
     micButton.disabled = true;
     newChatButton.disabled = true;
-    modeSelector.querySelectorAll("button").forEach(
-      button => button.disabled = true
-    );
+    modeButton.disabled = true;
 
     showTyping();
 
@@ -494,9 +505,7 @@ composer.addEventListener(
       micButton.disabled = false;
       newChatButton.disabled = false;
 
-      modeSelector.querySelectorAll("button").forEach(
-        button => button.disabled = false
-      );
+      modeButton.disabled = false;
 
       input.focus();
     }
