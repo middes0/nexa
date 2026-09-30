@@ -25,6 +25,12 @@
 
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
+        <button type="button" id="voiceButton" class="voice-button" aria-label="Escolher voz" title="Voz da NEXA">◉</button>
+<div class="voice-overlay" id="voiceOverlay"></div>
+<aside class="voice-panel" id="voicePanel" aria-label="Voz da NEXA">
+  <div class="voice-header"><div><strong>Voz da NEXA</strong><span>Escolha como ela vai falar.</span></div><button type="button" id="voiceCloseButton" class="voice-close" aria-label="Fechar">×</button></div>
+  <div class="voice-content"><div id="voiceList" class="voice-list"></div><div class="voice-actions"><button type="button" id="voiceTestButton">Testar voz</button><button type="button" id="voiceSaveButton">Salvar preferência</button></div></div>
+</aside>
         <button type="button" id="historyButton" class="history-button" aria-label="Abrir histórico" title="Histórico">☰</button>
         <button type="button" id="memoryButton" class="memory-button" aria-label="Abrir memórias" title="Memórias">◈</button>
         <button type="button" id="newChatButton" class="new-chat-button">
