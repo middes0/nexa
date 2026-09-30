@@ -1242,12 +1242,11 @@ composer.addEventListener(
 micButton.addEventListener(
   "click",
   function() {
-    if (!wakePermissionGranted) {
-      if (enableWakeWord()) {
-        micButton.title = "Escuta da NEXA ativada";
-        return;
-      }
+    if (enableWakeWord()) {
+      micButton.title = "Escuta da NEXA ativa";
     }
+    return;
+
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
