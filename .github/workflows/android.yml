@@ -42,7 +42,10 @@ jobs:
           permission = '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />'
 
           if "android.permission.SCHEDULE_EXACT_ALARM" not in text:
-              text = text.replace("<manifest", "<manifest\n" + permission, 1)
+              marker = "<application"
+              if marker not in text:
+                  raise SystemExit("Não encontrei a tag <application> no AndroidManifest.xml")
+              text = text.replace(marker, permission + "\n" + marker, 1)
 
           manifest.write_text(text)
           PY
