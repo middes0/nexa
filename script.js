@@ -133,34 +133,80 @@ function loadNexaVoice() {
   renderVoiceList();
 }
 
-function renderVoiceList() {
-  if (!voiceList) return;
-  voiceList.innerHTML = "";
-  const voices = availableVoices
+function getVoiceFamilyKey(voice) {
+  return String(voice.name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/\\b(google|microsoft|apple|samsung|amazon|android|online|offline|natural|premium|enhanced|standard|voice|voices|portuguese|portugal|brazil|brasil|pt[-_ ]?br|pt[-_ ]?pt)\\b/g, "")
+    .replace(/\\b(pt[-_ ]?[a-z]{2}|[a-z]{2}[-_][a-z]{2})\\b/g, "")
+    .replace(/[()\\[\\]{}._,-]+/g, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function getDistinctPortugueseVoices() {
+  const candidates = availableVoices
     .filter(function(voice) {
       return voice.lang && voice.lang.toLowerCase().startsWith("pt");
     })
-    .sort(function(x, y) {
-      return x.name.localeCompare(y.name);
+    .sort(function(a, b) {
+      const aBrazil = a.lang.toLowerCase() === "pt-br" ? 0 : 1;
+      const bBrazil = b.lang.toLowerCase() === "pt-br" ? 0 : 1;
+      if (aBrazil !== bBrazil) return aBrazil - bBrazil;
+
+      const aLocal = a.localService ? 0 : 1;
+      const bLocal = b.localService ? 0 : 1;
+      if (aLocal !== bLocal) return aLocal - bLocal;
+
+      return String(a.name).localeCompare(String(b.name));
     });
+
+  const seenFamilies = new Set();
+  const distinct = [];
+
+  candidates.forEach(function(voice) {
+    const family = getVoiceFamilyKey(voice) || String(voice.name || "").toLowerCase();
+
+    if (seenFamilies.has(family)) return;
+
+    seenFamilies.add(family);
+    distinct.push(voice);
+  });
+
+  return distinct;
+}
+
+function renderVoiceList() {
+  if (!voiceList) return;
+  voiceList.innerHTML = "";
+
+  const voices = getDistinctPortugueseVoices();
+
   if (!voices.length) {
-    voiceList.innerHTML = '<div class="voice-empty">Nenhuma voz disponível neste navegador.</div>';
+    voiceList.innerHTML = '<div class="voice-empty">Nenhuma voz diferente disponível neste navegador.</div>';
     return;
   }
+
   voices.forEach(function(voice) {
     const option = document.createElement("button");
     option.type = "button";
     option.className = "voice-option" + (selectedVoice && selectedVoice.name === voice.name ? " active" : "");
+
     const name = document.createElement("strong");
     name.textContent = voice.name;
+
     const lang = document.createElement("span");
-    lang.textContent = voice.lang || "";
+    lang.textContent = voice.lang === "pt-BR" ? "Português (Brasil)" : (voice.lang || "");
+
     option.appendChild(name);
     option.appendChild(lang);
+
     option.addEventListener("click", function() {
       selectedVoice = voice;
       renderVoiceList();
     });
+
     voiceList.appendChild(option);
   });
 }
