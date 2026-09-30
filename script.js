@@ -259,6 +259,7 @@ let voiceSpeechQueue = [];
 let voiceSpeechRunning = false;
 let voiceSpeechToken = 0;
 let voiceStreamPending = "";
+let voiceStreamActive = false;
 
 async function loadNexaVoice() {
   if (!voiceList) return;
@@ -501,6 +502,7 @@ function resetVoiceSpeechQueue() {
   voiceSpeechQueue = [];
   voiceSpeechRunning = false;
   voiceStreamPending = "";
+  voiceStreamActive = false;
 }
 
 function queueVoiceSpeech(text) {
@@ -528,6 +530,7 @@ async function processVoiceSpeechQueue() {
     if (
       !voiceSpeechRunning &&
       !voiceSpeechQueue.length &&
+      !voiceStreamActive &&
       window.NEXAVoiceMode?.isActive?.()
     ) {
       window.NEXAVoiceMode.resumeListening();
@@ -573,7 +576,7 @@ async function processVoiceSpeechQueue() {
 
   if (voiceSpeechQueue.length) {
     processVoiceSpeechQueue();
-  } else {
+  } else if (!voiceStreamActive) {
     window.NEXAVoiceMode.resumeListening();
   }
 }
@@ -581,6 +584,7 @@ async function processVoiceSpeechQueue() {
 function feedVoiceSpeechStream(text) {
   if (!window.NEXAVoiceMode?.isActive?.() || !speechEnabled) return;
 
+  voiceStreamActive = true;
   voiceStreamPending += String(text || "");
 
   // Só envia frases completas para o TTS. Assim a primeira frase pode
@@ -604,6 +608,7 @@ function feedVoiceSpeechStream(text) {
 function finishVoiceSpeechStream() {
   if (!window.NEXAVoiceMode?.isActive?.()) return;
 
+  voiceStreamActive = false;
   const remaining = voiceStreamPending.trim();
   voiceStreamPending = "";
 
@@ -1905,6 +1910,11 @@ async function askNexaWithImage(text, imageData) {
 }
 
 async function askNexa(text) {
+  if (window.NEXAVoiceMode?.isActive?.()) {
+    voiceStreamActive = true;
+    voiceStreamPending = "";
+  }
+
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -2876,6 +2886,7 @@ restoreSavedNexaVoice();
 
     stopNexaSpeech();
     resetVoiceSpeechQueue();
+    voiceStreamActive = false;
 
     setState(
       "",
