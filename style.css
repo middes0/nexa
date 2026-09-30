@@ -3291,8 +3291,23 @@ footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 10px;
   min-width: 0;
+  flex-wrap: nowrap;
+}
+.topbar-status-group,
+.topbar-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.topbar-status-group {
+  padding-right: 9px;
+  border-right: 1px solid rgba(185,156,255,.12);
+}
+.topbar-nav-group {
+  padding-left: 1px;
 }
 .topbar-actions > .icon-button {
   flex: 0 0 38px;
@@ -3300,17 +3315,11 @@ footer {
   height: 38px;
   border-radius: 11px;
 }
-.topbar-actions > #historyButton {
-  margin-left: 5px;
-}
-.topbar-actions > #historyButton::before {
-  content: "";
-  position: absolute;
-}
-.topbar-actions > #newChatButton {
-  white-space: nowrap;
+.topbar-nav-group > .new-chat-button {
   min-height: 38px;
 }
+.topbar-actions > #historyButton { margin-left: 0; }
+.topbar-nav-group > #newChatButton { white-space: nowrap; }
 .settings-content {
   display: grid;
   gap: 7px;
@@ -3391,7 +3400,17 @@ body.nexa-reduced-motion *::after {
   .topbar-actions {
     flex: 1 1 100%;
     justify-content: flex-start;
-    gap: 6px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .topbar-status-group {
+    padding-right: 6px;
+  }
+  .topbar-status-group .status {
+    display: none;
+  }
+  .topbar-nav-group {
+    margin-left: auto;
   }
   .topbar-actions > #historyButton {
     margin-left: 0;
@@ -3403,16 +3422,29 @@ body.nexa-reduced-motion *::after {
 @media (max-width: 420px) {
   .topbar-actions {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: 1fr auto;
     width: 100%;
+    gap: 7px;
   }
-  .topbar-actions > .icon-button {
-    width: 100%;
+  .topbar-status-group,
+  .topbar-nav-group {
     min-width: 0;
   }
-  .topbar-actions > #newChatButton {
-    grid-column: 1 / -1;
-    margin: 2px 0 0;
+  .topbar-status-group {
+    border-right: 0;
+    padding-right: 0;
+  }
+  .topbar-nav-group {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+  .topbar-actions .icon-button {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+  .topbar-nav-group > #newChatButton {
+    display: none;
   }
   .settings-control {
     grid-template-columns: 34px minmax(0,1fr) auto;
