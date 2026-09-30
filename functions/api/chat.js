@@ -112,7 +112,7 @@ async function createElevenSpeechResponse(apiKey, voiceId, text) {
   const response = await fetch(
     "https://api.elevenlabs.io/v1/text-to-speech/" +
       encodeURIComponent(voiceId) +
-      "?output_format=mp3_44100_64",
+      "/stream?output_format=mp3_44100_64&optimize_streaming_latency=1",
     {
       method: "POST",
       headers: {
