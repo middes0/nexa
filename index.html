@@ -26,6 +26,7 @@
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
         <button type="button" id="historyButton" class="history-button" aria-label="Abrir histórico" title="Histórico">☰</button>
+        <button type="button" id="memoryButton" class="memory-button" aria-label="Abrir memórias" title="Memórias">◈</button>
         <button type="button" id="newChatButton" class="new-chat-button">
           Nova conversa
         </button>
@@ -43,6 +44,30 @@
       </div>
 
       <div class="history-list" id="historyList"></div>
+    </aside>
+
+    <div class="memory-overlay" id="memoryOverlay"></div>
+    <aside class="memory-panel" id="memoryPanel" aria-label="Memórias da NEXA">
+      <div class="memory-header">
+        <div>
+          <strong>Memórias</strong>
+          <span>O que a NEXA lembra sobre você</span>
+        </div>
+        <button type="button" id="closeMemoryButton" class="memory-close" aria-label="Fechar memórias">×</button>
+      </div>
+
+      <div class="memory-content">
+        <div class="memory-info">
+          <span class="memory-info-icon">◈</span>
+          <p>Essas informações ficam salvas para a NEXA usar em outras conversas.</p>
+        </div>
+
+        <div class="memory-list" id="memoryList"></div>
+
+        <button type="button" id="clearMemoriesButton" class="clear-memories-button">
+          Apagar todas as memórias
+        </button>
+      </div>
     </aside>
 
     <section class="hero">
@@ -118,6 +143,6 @@
     <footer>NEXA v0.3 • Groq conectado via Cloudflare</footer>
   </main>
 
-  <script src="script.js?v=7"></script>
+  <script src="script.js?v=8"></script>
 </body>
 </html>
