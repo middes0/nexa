@@ -2176,3 +2176,142 @@ button:disabled {
 .message-replay:active {
   transform: scale(.96);
 }
+
+
+/* =========================
+   RESPOSTAS RICAS
+========================= */
+
+.message-content {
+  margin-top: 5px;
+  line-height: 1.55;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.message-content h3,
+.message-content h4 {
+  margin: 10px 0 5px;
+  color: #fff;
+}
+
+.message-content h3 {
+  font-size: 16px;
+}
+
+.message-content h4 {
+  font-size: 14px;
+}
+
+.message-content strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+.message-content em {
+  color: #d7c9eb;
+}
+
+.inline-code {
+  padding: 2px 5px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 5px;
+  background: #100b17;
+  color: #d5bfff;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.code-block {
+  margin: 10px 0;
+  overflow: hidden;
+  border: 1px solid #2b203d;
+  border-radius: 11px;
+  background: #08060c;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 5px 7px 5px 10px;
+  border-bottom: 1px solid #241936;
+  background: #100b17;
+}
+
+.code-language {
+  color: #91889f;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.code-copy {
+  padding: 5px 8px;
+  border: 1px solid #2b203d;
+  border-radius: 7px;
+  background: #171021;
+  color: #b99cff;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.code-copy:hover {
+  color: #fff;
+  border-color: #8b5cf6;
+  background: #241438;
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  color: #e7e0f0;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.code-block code {
+  font: inherit;
+}
+
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.message-action {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #2b203d;
+  border-radius: 8px;
+  background: #120d1b;
+  color: #9d8ab8;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.message-action:hover {
+  color: #fff;
+  border-color: #8b5cf6;
+  background: #21162f;
+}
+
+.message-action:active {
+  transform: scale(.95);
+}
+
+.message.user .message-actions {
+  display: none;
+}
