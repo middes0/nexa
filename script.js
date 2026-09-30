@@ -245,7 +245,8 @@ if (imageButton && imageInput) {
    VOZ DA NEXA
 ========================= */
 
-let speechEnabled = true;
+const SPEECH_ENABLED_KEY = "nexa_speech_enabled";
+let speechEnabled = localStorage.getItem(SPEECH_ENABLED_KEY) !== "false";
 let selectedVoice = null;
 let availableVoices = [];
 let elevenLabsAudio = null;
@@ -518,6 +519,50 @@ function closeVoicePanel() {
   voiceOverlay.classList.remove("open");
 }
 
+function stopNexaSpeech() {
+  speechEnabled = false;
+  localStorage.setItem(SPEECH_ENABLED_KEY, "false");
+  elevenLabsRequestId++;
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  if (elevenLabsAudio) {
+    elevenLabsAudio.pause();
+    try {
+      URL.revokeObjectURL(elevenLabsAudio.src);
+    } catch (error) {}
+    elevenLabsAudio = null;
+  }
+
+  if (wakeRestartTimer) {
+    clearTimeout(wakeRestartTimer);
+    wakeRestartTimer = null;
+  }
+}
+
+function setNexaSpeechEnabled(enabled) {
+  speechEnabled = Boolean(enabled);
+  localStorage.setItem(SPEECH_ENABLED_KEY, speechEnabled ? "true" : "false");
+
+  if (!speechEnabled) {
+    stopNexaSpeech();
+  }
+
+  updateSpeechButton();
+}
+
+function updateSpeechButton() {
+  const button = document.getElementById("speechToggleButton");
+  if (!button) return;
+
+  button.textContent = speechEnabled ? "◖" : "◌";
+  button.title = speechEnabled ? "NEXA falando — toque para calar" : "NEXA muda — toque para ativar";
+  button.setAttribute("aria-label", speechEnabled ? "Calar a NEXA" : "Ativar voz da NEXA");
+  button.classList.toggle("muted", !speechEnabled);
+}
+
 function speakNexa(text) {
   if (!speechEnabled || !text) return;
 
@@ -559,6 +604,25 @@ function speakNexa(text) {
     window.speechSynthesis.speak(utterance);
   }
 }
+
+const speechToggleButton = document.getElementById("speechToggleButton");
+
+if (speechToggleButton) {
+  speechToggleButton.addEventListener("click", function() {
+    setNexaSpeechEnabled(!speechEnabled);
+  });
+}
+
+document.addEventListener("visibilitychange", function() {
+  if (document.hidden) {
+    stopNexaSpeech();
+  }
+});
+
+window.addEventListener("pagehide", stopNexaSpeech);
+window.addEventListener("beforeunload", stopNexaSpeech);
+
+updateSpeechButton();
 
 if (voiceButton) voiceButton.addEventListener("click", openVoicePanel);
 if (voiceCloseButton) voiceCloseButton.addEventListener("click", closeVoicePanel);
