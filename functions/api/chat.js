@@ -203,6 +203,216 @@ function buildContents(messages, memories) {
   return contents;
 }
 
+function normalizeCalculatorExpression(input) {
+  let expression = String(input || "").trim().toLowerCase();
+
+  expression = expression
+    .replace(/quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/g, "")
+    .replace(/\bde\b/g, "*")
+    .replace(/\bx\b/g, "*")
+    .replace(/,/g, ".")
+    .replace(/%/g, "/100")
+    .replace(/[^0-9+\\-*/().%^\\s]/g, "")
+    .replace(/\^/g, "**")
+    .trim();
+
+  return expression;
+}
+
+function tokenizeCalculator(expression) {
+  const tokens = [];
+  let i = 0;
+
+  while (i < expression.length) {
+    const char = expression[i];
+
+    if (/\\s/.test(char)) {
+      i++;
+      continue;
+    }
+
+    if (/[0-9.]/.test(char)) {
+      let number = "";
+
+      while (i < expression.length && /[0-9.]/.test(expression[i])) {
+        number += expression[i++];
+      }
+
+      if ((number.match(/\\./g) || []).length > 1 || number === ".") {
+        throw new Error("Número inválido.");
+      }
+
+      tokens.push({ type: "number", value: Number(number) });
+      continue;
+    }
+
+    if ("+-*/%()".includes(char)) {
+      tokens.push({ type: char, value: char });
+      i++;
+      continue;
+    }
+
+    if (char === "*" && expression[i + 1] === "*") {
+      tokens.push({ type: "^", value: "^" });
+      i += 2;
+      continue;
+    }
+
+    throw new Error("Expressão inválida.");
+  }
+
+  return tokens;
+}
+
+function calculateExpression(input) {
+  const expression = normalizeCalculatorExpression(input);
+
+  if (!expression || expression.length > 120) {
+    return null;
+  }
+
+  if (!/[0-9]/.test(expression)) {
+    return null;
+  }
+
+  const tokens = tokenizeCalculator(expression);
+  let position = 0;
+
+  function peek(type) {
+    return tokens[position]?.type === type;
+  }
+
+  function consume(type) {
+    if (!peek(type)) {
+      throw new Error("Expressão inválida.");
+    }
+
+    return tokens[position++];
+  }
+
+  function parsePrimary() {
+    if (peek("+")) {
+      consume("+");
+      return parsePrimary();
+    }
+
+    if (peek("-")) {
+      consume("-");
+      return -parsePrimary();
+    }
+
+    if (peek("(")) {
+      consume("(");
+      const value = parseAdditive();
+      consume(")");
+      return value;
+    }
+
+    if (peek("number")) {
+      return consume("number").value;
+    }
+
+    throw new Error("Expressão inválida.");
+  }
+
+  function parsePower() {
+    const left = parsePrimary();
+
+    if (peek("^")) {
+      consume("^");
+      return Math.pow(left, parsePower());
+    }
+
+    return left;
+  }
+
+  function parseMultiplicative() {
+    let value = parsePower();
+
+    while (peek("*") || peek("/") || peek("%")) {
+      const operator = tokens[position++].type;
+      const right = parsePower();
+
+      if (operator === "*") value *= right;
+      if (operator === "/") {
+        if (right === 0) throw new Error("Não dá para dividir por zero.");
+        value /= right;
+      }
+      if (operator === "%") value %= right;
+    }
+
+    return value;
+  }
+
+  function parseAdditive() {
+    let value = parseMultiplicative();
+
+    while (peek("+") || peek("-")) {
+      const operator = tokens[position++].type;
+      const right = parseMultiplicative();
+
+      if (operator === "+") value += right;
+      if (operator === "-") value -= right;
+    }
+
+    return value;
+  }
+
+  const result = parseAdditive();
+
+  if (position !== tokens.length || !Number.isFinite(result)) {
+    throw new Error("Expressão inválida.");
+  }
+
+  return result;
+}
+
+function formatCalculatorResult(value) {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return String(Number(value.toFixed(12))).replace(".", ",");
+}
+
+function shouldUseCalculator(message) {
+  const text = String(message || "").trim().toLowerCase();
+
+  if (!text || text.length > 160) return false;
+
+  const hasMathSignal =
+    /[+*/%^]/.test(text) ||
+    /\\d+\\s*[x×]\\s*\\d+/.test(text) ||
+    /\\d+\\s*(de|por cento|%)\\s*\\d+/.test(text);
+
+  const hasCalculationWord =
+    /quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/.test(text);
+
+  const mostlyMath =
+    /^[0-9\\s+\\-*/().,%^x×de]+$/.test(text);
+
+  return hasMathSignal && (hasCalculationWord || mostlyMath);
+}
+
+function runCalculatorTool(message) {
+  if (!shouldUseCalculator(message)) return null;
+
+  try {
+    const result = calculateExpression(message);
+
+    if (result === null) return null;
+
+    return {
+      expression: message.trim(),
+      result: formatCalculatorResult(result)
+    };
+  } catch (error) {
+    return {
+      error: error?.message || "Não consegui calcular essa expressão."
+    };
+  }
+}
+
 function getThinkingConfig(mode) {
   const level = THINKING_LEVELS[mode];
 
