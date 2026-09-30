@@ -55,25 +55,6 @@
       <p>Seu assistente pessoal está pronto para começar.</p>
     </section>
 
-    <section class="mode-panel" aria-label="Modo de resposta">
-      <div class="mode-heading">
-        <span>Modo de resposta</span>
-        <strong id="modeValue">Médio</strong>
-      </div>
-
-      <div class="mode-selector" id="modeSelector">
-        <button type="button" data-mode="none">Nenhum</button>
-        <button type="button" data-mode="low">Baixo</button>
-        <button type="button" data-mode="medium" class="active">Médio</button>
-        <button type="button" data-mode="high">Alto</button>
-        <button type="button" data-mode="maximum">Máximo</button>
-      </div>
-
-      <p class="mode-description" id="modeDescription">
-        Equilíbrio entre velocidade e profundidade.
-      </p>
-    </section>
-
     <section class="chat" id="chat" aria-live="polite" aria-label="Conversa com a NEXA">
       <div class="message nexa">
         <span class="label">NEXA</span>
@@ -84,6 +65,18 @@
     <form class="composer" id="composer" autocomplete="off">
       <input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off" aria-label="Mensagem">
 
+      <div class="composer-mode">
+        <button type="button" id="modeButton" class="mode-button" aria-label="Escolher modo de resposta" title="Modo de resposta">M</button>
+        <div class="mode-menu" id="modeMenu">
+          <div class="mode-menu-title">Modo de resposta</div>
+          <button type="button" data-mode="none">Nenhum</button>
+          <button type="button" data-mode="low">Baixo</button>
+          <button type="button" data-mode="medium">Médio</button>
+          <button type="button" data-mode="high">Alto</button>
+          <button type="button" data-mode="maximum">Máximo</button>
+        </div>
+      </div>
+
       <button type="button" id="micButton" aria-label="Microfone" title="Falar">◉</button>
 
       <button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button>
@@ -92,6 +85,6 @@
     <footer>NEXA v0.3 • Gemini conectado via Cloudflare</footer>
   </main>
 
-  <script src="script.js?v=4"></script>
+  <script src="script.js?v=5"></script>
 </body>
 </html>
