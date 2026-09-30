@@ -162,20 +162,28 @@ async function cleanMemory(env, userId) {
 }
 
 async function extractMemory(env, userId, userMessage, assistantMessage) {
-  if (!env.GROQ_API_KEY || !userId) return;
+  if (!env.GROQ_API_KEY || !userId || !userMessage) return;
 
   const prompt =
-    "Analise a conversa abaixo.\n\n" +
+    "Você é o sistema de memória da NEXA. Analise SOMENTE a mensagem do usuário " +
+    "e identifique se ela contém uma informação estável que valha a pena lembrar.\n\n" +
     "Usuário:\n" + userMessage +
-    "\n\nNEXA:\n" + assistantMessage +
+    "\n\nResposta da NEXA (apenas contexto):\n" + assistantMessage +
     "\n\n" +
-    "Se houver uma informação estável e realmente útil para lembrar sobre o usuário " +
-    "(preferência, projeto, objetivo, nome, contexto pessoal ou algo que possa " +
-    "ser útil futuramente), responda SOMENTE com uma frase curta em terceira pessoa.\n\n" +
-    "Não salve detalhes passageiros, perguntas comuns, fatos sobre a NEXA ou informações " +
-    "que não sejam claramente sobre o usuário.\n\n" +
-    "Se não houver nada relevante, responda:\nNENHUMA\n\n" +
-    "Não invente informações.";
+    "Regras:\n" +
+    "1. Salve preferências, projetos atuais, objetivos, nome, apelidos, ferramentas " +
+    "que usa e outras informações estáveis sobre o próprio usuário.\n" +
+    "2. Não salve perguntas, informações temporárias, resultados de buscas, contas, " +
+    "senhas, chaves, tokens, dados financeiros ou informações sobre terceiros.\n" +
+    "3. Não transforme uma intenção passageira em preferência permanente.\n" +
+    "4. Escreva uma única memória curta, específica e em terceira pessoa.\n" +
+    "5. Se não houver algo claramente útil, responda exatamente NENHUMA.\n" +
+    "6. Nunca invente nem deduza fatos que o usuário não disse.\n\n" +
+    "Exemplos:\n" +
+    "Usuário: Meu nome é João. -> O nome do usuário é João.\n" +
+    "Usuário: Estou trabalhando no projeto NEXA. -> O usuário está trabalhando no projeto NEXA.\n" +
+    "Usuário: Hoje quero calcular 20 x 30. -> NENHUMA\n\n" +
+    "Responda somente com a memória ou NENHUMA.";
 
   try {
     const response = await fetch(
@@ -187,18 +195,18 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
           "Authorization": "Bearer " + env.GROQ_API_KEY
         },
         body: JSON.stringify({
-          model: FALLBACK_MODEL,
+          model: PRIMARY_MODEL,
           messages: [
             {
               role: "system",
-              content: "Extraia apenas memórias úteis e verdadeiras do usuário."
+              content: "Você extrai memórias de usuário com máxima precisão. Nunca invente."
             },
             {
               role: "user",
               content: prompt
             }
           ],
-          max_completion_tokens: 100,
+          max_completion_tokens: 80,
           temperature: 0
         })
       }
@@ -207,15 +215,19 @@ async function extractMemory(env, userId, userMessage, assistantMessage) {
     if (!response.ok) return;
 
     const data = await response.json();
+    let memory = data?.choices?.[0]?.message?.content?.trim() || "";
 
-    const memory =
-      data?.choices?.[0]?.message?.content?.trim() || "";
+    memory = memory
+      .replace(/^["'\u0060]+|["'\u0060]+$/g, "")
+      .replace(/^(memória|memoria)\s*:\s*/i, "")
+      .trim();
 
     if (
       memory &&
-      memory !== "NENHUMA" &&
+      !/^NENHUMA$/i.test(memory) &&
       memory.length > 3 &&
-      memory.length < 500
+      memory.length < 300 &&
+      !/[<>]/.test(memory)
     ) {
       await saveMemory(env, userId, memory);
       await cleanMemory(env, userId);
