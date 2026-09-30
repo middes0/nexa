@@ -2255,3 +2255,202 @@ if (activeConversationId) {
 restoreConversation();
 renderHistory();
 restoreSavedNexaVoice();
+
+
+/* =========================
+   CENTRAL DE AUTOMAÇÕES
+========================= */
+
+(function initNexaAutomationCenter() {
+  const automationButton = document.getElementById("automationButton");
+  const automationPanel = document.getElementById("automationPanel");
+  const automationOverlay = document.getElementById("automationOverlay");
+  const closeAutomationButton = document.getElementById("closeAutomationButton");
+  const automationList = document.getElementById("automationList");
+  const automationSummary = document.getElementById("automationSummary");
+
+  if (!automationButton || !automationPanel || !automationList) return;
+
+  let automationTab = "reminders";
+
+  function openAutomationPanel() {
+    automationPanel.classList.add("open");
+    automationOverlay?.classList.add("open");
+    renderAutomationCenter();
+  }
+
+  function closeAutomationPanel() {
+    automationPanel.classList.remove("open");
+    automationOverlay?.classList.remove("open");
+  }
+
+  function formatAutomationDate(timestamp) {
+    const date = new Date(Number(timestamp));
+    if (Number.isNaN(date.getTime())) return "data desconhecida";
+
+    return date.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function renderAutomationCenter() {
+    const reminders = window.NEXAAutomation?.list?.() || [];
+    const routines = window.NEXAAutomation?.routines?.() || [];
+
+    automationSummary.textContent =
+      reminders.length +
+      (reminders.length === 1 ? " lembrete" : " lembretes") +
+      " • " +
+      routines.length +
+      (routines.length === 1 ? " rotina salva" : " rotinas salvas");
+
+    automationList.innerHTML = "";
+
+    if (automationTab === "routines") {
+      if (!routines.length) {
+        automationList.innerHTML =
+          '<div class="automation-empty">Nenhuma rotina salva ainda.<br>Ex.: “Cria uma rotina estudo: ...”</div>';
+        return;
+      }
+
+      routines.forEach(function(routine) {
+        const card = document.createElement("article");
+        card.className = "automation-card";
+
+        const title = document.createElement("div");
+        title.className = "automation-card-title";
+        title.textContent = routine.name;
+
+        const meta = document.createElement("div");
+        meta.className = "automation-card-meta";
+        meta.textContent = routine.commands.join(" • ");
+
+        const actions = document.createElement("div");
+        actions.className = "automation-card-actions";
+
+        const run = document.createElement("button");
+        run.type = "button";
+        run.textContent = "Executar";
+        run.addEventListener("click", async function() {
+          const result = await window.NEXAAutomation?.handle?.(
+            "NEXA, executa a rotina " + routine.name
+          );
+          if (result?.reply) addMessage(result.reply, "nexa");
+          renderAutomationCenter();
+        });
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Excluir";
+        remove.addEventListener("click", function() {
+          if (!confirm("Excluir a rotina " + routine.name + "?")) return;
+
+          const updated = (window.NEXAAutomation?.routines?.() || [])
+            .filter(item => item.id !== routine.id);
+
+          localStorage.setItem(
+            "nexa_routines",
+            JSON.stringify(updated)
+          );
+
+          renderAutomationCenter();
+        });
+
+        actions.append(run, remove);
+        card.append(title, meta, actions);
+        automationList.appendChild(card);
+      });
+
+      return;
+    }
+
+    if (!reminders.length) {
+      automationList.innerHTML =
+        '<div class="automation-empty">Nenhum lembrete agendado.</div>';
+      return;
+    }
+
+    reminders.forEach(function(reminder) {
+      const card = document.createElement("article");
+      card.className = "automation-card" +
+        (reminder.status === "paused" ? " paused" : "");
+
+      const title = document.createElement("div");
+      title.className = "automation-card-title";
+      title.textContent = reminder.text;
+
+      const remaining = Math.max(
+        1,
+        Math.round((Number(reminder.triggerAt) - Date.now()) / 1000)
+      );
+
+      const meta = document.createElement("div");
+      meta.className = "automation-card-meta";
+      meta.textContent =
+        (reminder.status === "paused"
+          ? "Pausado"
+          : "Agendado para " + formatAutomationDate(reminder.triggerAt)) +
+        (reminder.recurrence ? " • recorrente" : "");
+
+      const actions = document.createElement("div");
+      actions.className = "automation-card-actions";
+
+      if (reminder.status !== "paused") {
+        const pause = document.createElement("button");
+        pause.type = "button";
+        pause.textContent = "Pausar";
+        pause.addEventListener("click", async function() {
+          await window.NEXAAutomation?.pause?.(reminder.id);
+          renderAutomationCenter();
+        });
+        actions.appendChild(pause);
+      } else {
+        const resume = document.createElement("button");
+        resume.type = "button";
+        resume.textContent = "Retomar";
+        resume.addEventListener("click", async function() {
+          await window.NEXAAutomation?.resume?.(reminder.id);
+          renderAutomationCenter();
+        });
+        actions.appendChild(resume);
+      }
+
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Excluir";
+      cancel.addEventListener("click", async function() {
+        await window.NEXAAutomation?.cancelById?.(reminder.id);
+        renderAutomationCenter();
+      });
+
+      actions.appendChild(cancel);
+      card.append(title, meta, actions);
+      automationList.appendChild(card);
+    });
+  }
+
+  automationButton.addEventListener("click", openAutomationPanel);
+  closeAutomationButton?.addEventListener("click", closeAutomationPanel);
+  automationOverlay?.addEventListener("click", closeAutomationPanel);
+
+  document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape" && automationPanel.classList.contains("open")) {
+      closeAutomationPanel();
+    }
+  });
+
+  document.querySelectorAll("[data-automation-tab]").forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      automationTab = tab.dataset.automationTab;
+      document.querySelectorAll("[data-automation-tab]").forEach(function(item) {
+        item.classList.toggle("active", item === tab);
+      });
+      renderAutomationCenter();
+    });
+  });
+
+  window.addEventListener("nexa:automation-changed", renderAutomationCenter);
+})();
