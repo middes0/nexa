@@ -15,22 +15,27 @@ const API_URL = "https://nexa-2.pages.dev/api/chat";
 const MODE_INFO = {
   none: {
     label: "Nenhum",
+    icon: "⌕",
     description: "Resposta direta, com o mínimo de raciocínio."
   },
   low: {
     label: "Baixo",
+    icon: "◔",
     description: "Rápido, mas com uma análise curta antes de responder."
   },
   medium: {
     label: "Médio",
+    icon: "◑",
     description: "Equilíbrio entre velocidade e profundidade."
   },
   high: {
     label: "Alto",
+    icon: "◉",
     description: "Mais análise para perguntas complexas."
   },
   maximum: {
     label: "Máximo",
+    icon: "◉",
     description: "Maior profundidade, podendo demorar mais."
   }
 };
@@ -47,7 +52,7 @@ if (!MODE_INFO[responseMode]) {
 function updateModeUI() {
   const info = MODE_INFO[responseMode];
 
-  modeButton.textContent = info.label;
+  modeButton.textContent = info.icon;
 
   modeButton.title = "Modo: " + info.label;
 
