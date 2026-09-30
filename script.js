@@ -136,11 +136,13 @@ function loadNexaVoice() {
 function renderVoiceList() {
   if (!voiceList) return;
   voiceList.innerHTML = "";
-  const voices = availableVoices.slice().sort(function(x, y) {
-    const xp = x.lang && x.lang.toLowerCase().startsWith("pt");
-    const yp = y.lang && y.lang.toLowerCase().startsWith("pt");
-    return Number(yp) - Number(xp) || x.name.localeCompare(y.name);
-  });
+  const voices = availableVoices
+    .filter(function(voice) {
+      return voice.lang && voice.lang.toLowerCase().startsWith("pt");
+    })
+    .sort(function(x, y) {
+      return x.name.localeCompare(y.name);
+    });
   if (!voices.length) {
     voiceList.innerHTML = '<div class="voice-empty">Nenhuma voz disponível neste navegador.</div>';
     return;
