@@ -8,6 +8,7 @@ const historyButton = document.getElementById("historyButton");
 const historyPanel = document.getElementById("historyPanel");
 const historyList = document.getElementById("historyList");
 const closeHistoryButton = document.getElementById("closeHistoryButton");
+const historyOverlay = document.getElementById("historyOverlay");
 const modeButton = document.getElementById("modeButton");
 const modeMenu = document.getElementById("modeMenu");
 
@@ -349,10 +350,14 @@ function renderHistory() {
 function openHistoryPanel() {
   renderHistory();
   historyPanel.classList.add("open");
+  historyOverlay.classList.add("open");
+  document.body.classList.add("history-open");
 }
 
 function closeHistoryPanel() {
   historyPanel.classList.remove("open");
+  historyOverlay.classList.remove("open");
+  document.body.classList.remove("history-open");
 }
 
 function openConversation(conversationId) {
@@ -794,8 +799,23 @@ newChatButton.addEventListener(
   startNewConversation
 );
 
-historyButton.addEventListener("click", openHistoryPanel);
-closeHistoryButton.addEventListener("click", closeHistoryPanel);
+if (historyButton) {
+  historyButton.addEventListener("click", openHistoryPanel);
+}
+
+if (closeHistoryButton) {
+  closeHistoryButton.addEventListener("click", closeHistoryPanel);
+}
+
+if (historyOverlay) {
+  historyOverlay.addEventListener("click", closeHistoryPanel);
+}
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape" && historyPanel.classList.contains("open")) {
+    closeHistoryPanel();
+  }
+});
 
 /* =========================
    ENVIO
