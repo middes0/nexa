@@ -278,6 +278,21 @@ async function scheduleNativeReminder(reminder) {
   if (!notifications || !(await requestNativeNotificationPermission())) return false;
 
   try {
+    // Android 12+ pode bloquear alarmes exatos mesmo com a permissão
+    // declarada no Manifest. O plugin abre a tela "Alarmes e lembretes"
+    // para o usuário liberar quando necessário.
+    if (typeof notifications.checkExactNotificationSetting === "function") {
+      try {
+        const exact = await notifications.checkExactNotificationSetting();
+        if (exact?.exact_alarm !== "granted" &&
+            typeof notifications.changeExactNotificationSetting === "function") {
+          await notifications.changeExactNotificationSetting();
+        }
+      } catch (exactError) {
+        console.warn("NEXA: não foi possível verificar alarme exato:", exactError);
+      }
+    }
+
     const notification = {
       id: getNativeNotificationId(reminder.id),
       title: "NEXA",
@@ -286,6 +301,8 @@ async function scheduleNativeReminder(reminder) {
         at: new Date(reminder.triggerAt),
         allowWhileIdle: true
       },
+      isExactNotification: true,
+      isExactMandatory: false,
       extra: {
         type: "nexa-reminder",
         reminderId: reminder.id
