@@ -54,7 +54,7 @@ async function getElevenVoices(apiKey) {
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY não configurada no Cloudflare.");
 
   const response = await fetch(
-    "https://api.elevenlabs.io/v2/voices?language=pt&limit=100",
+    "https://api.elevenlabs.io/v2/voices?language=pt&page_size=100",
     {
       headers: {
         "Accept": "application/json",
