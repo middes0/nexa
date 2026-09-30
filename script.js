@@ -267,6 +267,43 @@ function hideTyping() {
   if (typing) typing.remove();
 }
 
+function renderWebSources(sources, message) {
+  if (!Array.isArray(sources) || !sources.length) return;
+
+  const box = document.createElement("div");
+  box.className = "web-sources";
+
+  const title = document.createElement("div");
+  title.className = "web-sources-title";
+  title.textContent = "Fontes";
+
+  const list = document.createElement("div");
+  list.className = "web-sources-list";
+
+  sources.slice(0, 8).forEach(function(source) {
+    if (
+      !source ||
+      typeof source.url !== "string" ||
+      typeof source.title !== "string"
+    ) return;
+
+    const link = document.createElement("a");
+    link.className = "web-source";
+    link.href = source.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = source.title;
+
+    list.appendChild(link);
+  });
+
+  if (!list.children.length) return;
+
+  box.appendChild(title);
+  box.appendChild(list);
+  message.appendChild(box);
+}
+
 function createStreamingMessage() {
   const message = document.createElement("div");
   message.className = "message nexa";
@@ -334,7 +371,8 @@ async function askNexa(text) {
 
   hideTyping();
 
-  const { paragraph } = createStreamingMessage();
+  const streamingMessage = createStreamingMessage();
+  const paragraph = streamingMessage.paragraph;
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -375,6 +413,7 @@ async function askNexa(text) {
 
       if (data.type === "done") {
         finished = true;
+        renderWebSources(data.sources, streamingMessage.message);
       }
 
       if (data.type === "error") {
