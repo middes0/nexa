@@ -1574,7 +1574,10 @@ function updateStreamingMessage(paragraph, text) {
 
 
 async function askNexaWithImage(text, imageData) {
-  conversationImageData = imageData;\n  saveActiveConversation();\n\n  const response = await fetch(API_URL, {
+  conversationImageData = imageData;
+  saveActiveConversation();
+
+  const response = await fetch(API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
