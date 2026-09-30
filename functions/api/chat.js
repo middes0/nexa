@@ -1,4 +1,4 @@
-const PRIMARY_MODEL = "gemma-4-31b-it";
+const PRIMARY_MODEL = "gemini-3-flash-preview";
 const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 
 const SYSTEM_PROMPT = [
@@ -29,8 +29,20 @@ const SYSTEM_PROMPT = [
   "Não prolongue respostas simples."
 ].join("\n");
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400"
+};
 
-const CORS_HEADERS = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Access-Control-Max-Age":"86400"};
+const THINKING_LEVELS = {
+  none: "minimal",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  maximum: "high"
+};
 
 function jsonResponse(data, status) {
   return new Response(JSON.stringify(data), {
@@ -43,45 +55,33 @@ function jsonResponse(data, status) {
   });
 }
 
-
-/* =========================
-   MEMÓRIA
-========================= */
-
 async function getMemories(env, userId) {
   if (!env.DB || !userId) return [];
 
   try {
     const result = await env.DB
-      .prepare(
-        "SELECT memory FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 20"
-      )
+      .prepare("SELECT memory FROM memories WHERE user_id = ? ORDER BY id DESC LIMIT 20")
       .bind(userId)
       .all();
 
     return (result.results || []).map(function(row) {
       return row.memory;
     });
-
   } catch (error) {
     return [];
   }
 }
-
 
 async function saveMemory(env, userId, memory) {
   if (!env.DB || !userId || !memory) return;
 
   try {
     await env.DB
-      .prepare(
-        "INSERT INTO memories (user_id, memory, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)"
-      )
+      .prepare("INSERT INTO memories (user_id, memory, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
       .bind(userId, memory)
       .run();
   } catch (error) {}
 }
-
 
 async function cleanMemory(env, userId) {
   if (!env.DB || !userId) return;
@@ -91,8 +91,7 @@ async function cleanMemory(env, userId) {
       .prepare(
         "DELETE FROM memories WHERE user_id = ? " +
         "AND id NOT IN (" +
-        "SELECT id FROM memories " +
-        "WHERE user_id = ? " +
+        "SELECT id FROM memories WHERE user_id = ? " +
         "ORDER BY id DESC LIMIT 50)"
       )
       .bind(userId, userId)
@@ -100,25 +99,13 @@ async function cleanMemory(env, userId) {
   } catch (error) {}
 }
 
-
-/* =========================
-   EXTRAÇÃO DE MEMÓRIA
-========================= */
-
-async function extractMemory(
-  env,
-  userId,
-  userMessage,
-  assistantMessage
-) {
+async function extractMemory(env, userId, userMessage, assistantMessage) {
   if (!env.GEMINI_API_KEY || !userId) return;
 
   const prompt =
     "Analise a conversa abaixo.\n\n" +
-    "Usuário:\n" +
-    userMessage +
-    "\n\nNEXA:\n" +
-    assistantMessage +
+    "Usuário:\n" + userMessage +
+    "\n\nNEXA:\n" + assistantMessage +
     "\n\n" +
     "Se houver alguma informação realmente útil para lembrar sobre o usuário " +
     "(preferência, projeto, objetivo, nome, contexto pessoal ou algo que possa " +
@@ -129,8 +116,7 @@ async function extractMemory(
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" +
-      FALLBACK_MODEL +
-      ":generateContent",
+      FALLBACK_MODEL + ":generateContent",
       {
         method: "POST",
         headers: {
@@ -139,25 +125,12 @@ async function extractMemory(
         },
         body: JSON.stringify({
           systemInstruction: {
-            parts: [
-              {
-                text:
-                  "Extraia apenas memórias úteis e verdadeiras do usuário."
-              }
-            ]
+            parts: [{ text: "Extraia apenas memórias úteis e verdadeiras do usuário." }]
           },
-
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: prompt
-                }
-              ]
-            }
-          ],
-
+          contents: [{
+            role: "user",
+            parts: [{ text: prompt }]
+          }],
           generationConfig: {
             maxOutputTokens: 100
           }
@@ -178,25 +151,11 @@ async function extractMemory(
       memory.length > 3 &&
       memory.length < 500
     ) {
-      await saveMemory(
-        env,
-        userId,
-        memory
-      );
-
-      await cleanMemory(
-        env,
-        userId
-      );
+      await saveMemory(env, userId, memory);
+      await cleanMemory(env, userId);
     }
-
   } catch (error) {}
 }
-
-
-/* =========================
-   CONSTRUIR CONVERSA
-========================= */
 
 function buildContents(messages, memories) {
   const contents = [];
@@ -204,27 +163,20 @@ function buildContents(messages, memories) {
   if (memories.length) {
     contents.push({
       role: "user",
-      parts: [
-        {
-          text:
-            "Memórias relevantes sobre o usuário:\n" +
-            memories
-              .map(function(memory) {
-                return "- " + memory;
-              })
-              .join("\n")
-        }
-      ]
+      parts: [{
+        text:
+          "Memórias relevantes sobre o usuário:\n" +
+          memories.map(function(memory) {
+            return "- " + memory;
+          }).join("\n")
+      }]
     });
 
     contents.push({
       role: "model",
-      parts: [
-        {
-          text:
-            "Entendido. Vou usar essas memórias quando forem relevantes."
-        }
-      ]
+      parts: [{
+        text: "Entendido. Vou usar essas memórias quando forem relevantes."
+      }]
     });
   }
 
@@ -238,86 +190,60 @@ function buildContents(messages, memories) {
           : message.role === "model"
             ? "model"
             : "user",
-
-      parts: [
-        {
-          text: String(message.content)
-        }
-      ]
+      parts: [{ text: String(message.content) }]
     });
   }
 
   if (!contents.length) {
     contents.push({
       role: "user",
-      parts: [
-        {
-          text: "Olá"
-        }
-      ]
+      parts: [{ text: "Olá" }]
     });
   }
 
   return contents;
 }
 
+function getThinkingConfig(mode) {
+  const level = THINKING_LEVELS[mode] || THINKING_LEVELS.medium;
 
-/* =========================
-   REQUISIÇÃO DO MODELO
-========================= */
+  return {
+    thinkingLevel: level
+  };
+}
 
-function createModelRequest(
-  model,
-  apiKey,
-  messages,
-  memories,
-  signal
-) {
+function createModelRequest(model, apiKey, messages, memories, signal, mode) {
+  const generationConfig = {
+    maxOutputTokens: mode === "maximum" ? 320 : 220
+  };
+
+  if (model === PRIMARY_MODEL) {
+    generationConfig.thinkingConfig = getThinkingConfig(mode);
+  }
+
   return fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/" +
-    model +
-    ":streamGenerateContent?alt=sse",
+    model + ":streamGenerateContent?alt=sse",
     {
       method: "POST",
-
       headers: {
         "Content-Type": "application/json",
         "X-goog-api-key": apiKey
       },
-
       signal,
-
       body: JSON.stringify({
         systemInstruction: {
-          parts: [
-            {
-              text: SYSTEM_PROMPT
-            }
-          ]
+          parts: [{ text: SYSTEM_PROMPT }]
         },
-
-        contents:
-          buildContents(
-            messages,
-            memories
-          ),
-
-        generationConfig: {
-          maxOutputTokens: 180
-        }
+        contents: buildContents(messages, memories),
+        generationConfig
       })
     }
   );
 }
 
-
-/* =========================
-   SSE
-========================= */
-
 function parseSSEEvent(raw) {
   const lines = raw.split(/\r?\n/);
-
   let data = "";
 
   for (const line of lines) {
@@ -326,9 +252,7 @@ function parseSSEEvent(raw) {
     }
   }
 
-  if (!data || data === "[DONE]") {
-    return null;
-  }
+  if (!data || data === "[DONE]") return null;
 
   try {
     return JSON.parse(data);
@@ -337,100 +261,49 @@ function parseSSEEvent(raw) {
   }
 }
 
-
-/* =========================
-   EXTRAIR TEXTO
-========================= */
-
 function extractText(data) {
-  const parts =
-    data?.candidates?.[0]?.content?.parts || [];
-
+  const parts = data?.candidates?.[0]?.content?.parts || [];
   let text = "";
 
   for (const part of parts) {
     if (part?.thought === true) continue;
-
-    if (typeof part?.text === "string") {
-      text += part.text;
-    }
+    if (typeof part?.text === "string") text += part.text;
   }
 
   return text;
 }
 
-
-/* =========================
-   PRIMEIRO TEXTO
-========================= */
-
-async function waitForFirstText(
-  response,
-  model
-) {
+async function waitForFirstText(response, model) {
   if (!response.ok) {
-    const errorText =
-      await response.text();
-
-    throw new Error(
-      model +
-      " HTTP " +
-      response.status +
-      ": " +
-      errorText
-    );
+    const errorText = await response.text();
+    throw new Error(model + " HTTP " + response.status + ": " + errorText);
   }
 
   if (!response.body) {
-    throw new Error(
-      model +
-      " não retornou um corpo de resposta."
-    );
+    throw new Error(model + " não retornou um corpo de resposta.");
   }
 
-  const reader =
-    response.body.getReader();
-
-  const decoder =
-    new TextDecoder();
-
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
   let buffer = "";
 
   while (true) {
-    const result =
-      await reader.read();
+    const result = await reader.read();
 
     if (result.done) {
-      throw new Error(
-        model +
-        " encerrou sem retornar texto."
-      );
+      throw new Error(model + " encerrou sem retornar texto.");
     }
 
-    buffer +=
-      decoder.decode(
-        result.value,
-        {
-          stream: true
-        }
-      );
+    buffer += decoder.decode(result.value, { stream: true });
 
-    const events =
-      buffer.split(
-        /\r?\n\r?\n/
-      );
-
-    buffer =
-      events.pop() || "";
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() || "";
 
     for (const event of events) {
-      const data =
-        parseSSEEvent(event);
-
+      const data = parseSSEEvent(event);
       if (!data) continue;
 
-      const text =
-        extractText(data);
+      const text = extractText(data);
 
       if (text) {
         return {
@@ -444,11 +317,6 @@ async function waitForFirstText(
   }
 }
 
-
-/* =========================
-   STREAM PARA FRONTEND
-========================= */
-
 function createClientStream(
   env,
   reader,
@@ -460,71 +328,60 @@ function createClientStream(
   executionContext,
   modelUsed
 ) {
-  const encoder =
-    new TextEncoder();
+  const encoder = new TextEncoder();
+  let fullText = firstText;
 
-  let fullText =
-    firstText;
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(data) {
+        controller.enqueue(
+          encoder.encode(
+            "data: " + JSON.stringify(data) + "\n\n"
+          )
+        );
+      }
 
-  const stream =
-    new ReadableStream({
-      async start(controller) {
+      try {
+        send({
+          type: "text",
+          text: firstText
+        });
 
-        function send(data) {
-          controller.enqueue(
-            encoder.encode(
-              "data: " +
-              JSON.stringify(data) +
-              "\n\n"
-            )
-          );
+        let localBuffer = buffer;
+
+        while (true) {
+          const result = await reader.read();
+
+          if (result.done) break;
+
+          localBuffer += decoder.decode(result.value, { stream: true });
+
+          const events = localBuffer.split(/\r?\n\r?\n/);
+          localBuffer = events.pop() || "";
+
+          for (const event of events) {
+            const data = parseSSEEvent(event);
+            if (!data) continue;
+
+            const text = extractText(data);
+            if (!text) continue;
+
+            fullText += text;
+
+            send({
+              type: "text",
+              text
+            });
+          }
         }
 
-        try {
+        if (localBuffer) {
+          const data = parseSSEEvent(localBuffer);
 
-          send({
-            type: "text",
-            text: firstText
-          });
+          if (data) {
+            const text = extractText(data);
 
-          let localBuffer =
-            buffer;
-
-          while (true) {
-            const result =
-              await reader.read();
-
-            if (result.done) {
-              break;
-            }
-
-            localBuffer +=
-              decoder.decode(
-                result.value,
-                {
-                  stream: true
-                }
-              );
-
-            const events =
-              localBuffer.split(
-                /\r?\n\r?\n/
-              );
-
-            localBuffer =
-              events.pop() || "";
-
-            for (const event of events) {
-              const data =
-                parseSSEEvent(event);
-
-              if (!data) continue;
-
-              const text =
-                extractText(data);
-
-              if (!text) continue;
-
+            if (text) {
               fullText += text;
 
               send({
@@ -533,88 +390,45 @@ function createClientStream(
               });
             }
           }
-
-
-          if (localBuffer) {
-            const data =
-              parseSSEEvent(
-                localBuffer
-              );
-
-            if (data) {
-              const text =
-                extractText(data);
-
-              if (text) {
-                fullText += text;
-
-                send({
-                  type: "text",
-                  text
-                });
-              }
-            }
-          }
-
-
-          send({
-            type: "done",
-            model: modelUsed
-          });
-
-
-          if (
-            executionContext &&
-            executionContext.waitUntil
-          ) {
-            executionContext.waitUntil(
-              extractMemory(
-                env,
-                userId,
-                userMessage,
-                fullText
-              )
-            );
-          }
-
-          controller.close();
-
-        } catch (error) {
-
-          send({
-            type: "error",
-            error:
-              error?.message ||
-              "Erro durante a resposta."
-          });
-
-          controller.close();
         }
-      }
-    });
 
-  return new Response(
-    stream,
-    {
-      headers: {
-        "Content-Type":
-          "text/event-stream; charset=utf-8",
+        send({
+          type: "done",
+          model: modelUsed
+        });
 
-        "Cache-Control":
-          "no-cache, no-transform",
+        if (executionContext?.waitUntil) {
+          executionContext.waitUntil(
+            extractMemory(
+              env,
+              userId,
+              userMessage,
+              fullText
+            )
+          );
+        }
 
-        "Connection":
-          "keep-alive",
-        ...CORS_HEADERS
+        controller.close();
+      } catch (error) {
+        send({
+          type: "error",
+          error: error?.message || "Erro durante a resposta."
+        });
+
+        controller.close();
       }
     }
-  );
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      ...CORS_HEADERS
+    }
+  });
 }
-
-
-/* =========================
-   FALLBACK SEM STREAM
-========================= */
 
 async function createFallbackResponse(
   env,
@@ -622,196 +436,142 @@ async function createFallbackResponse(
   memories,
   userId,
   userMessage,
-  executionContext
+  executionContext,
+  mode
 ) {
-  const response =
-    await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      FALLBACK_MODEL +
-      ":generateContent",
+  const generationConfig = {
+    maxOutputTokens: mode === "maximum" ? 320 : 220,
+    thinkingConfig: getThinkingConfig(mode)
+  };
 
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-          "X-goog-api-key":
-            env.GEMINI_API_KEY
-        },
-
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: SYSTEM_PROMPT
-              }
-            ]
-          },
-
-          contents:
-            buildContents(
-              messages,
-              memories
-            ),
-
-          generationConfig: {
-            maxOutputTokens: 180
-          }
-        })
-      }
-    );
-
-  if (!response.ok) {
-    const errorText =
-      await response.text();
-
-    throw new Error(
-      FALLBACK_MODEL +
-      " HTTP " +
-      response.status +
-      ": " +
-      errorText
-    );
-  }
-
-  const data =
-    await response.json();
-
-  const parts =
-    data?.candidates?.[0]?.content?.parts || [];
-
-  const text =
-    parts
-      .filter(function(part) {
-        return (
-          part?.thought !== true &&
-          typeof part?.text === "string"
-        );
-      })
-      .map(function(part) {
-        return part.text;
-      })
-      .join("");
-
-  if (!text.trim()) {
-    throw new Error(
-      FALLBACK_MODEL +
-      " respondeu sem texto."
-    );
-  }
-
-  const encoder =
-    new TextEncoder();
-
-  const stream =
-    new ReadableStream({
-      start(controller) {
-
-        controller.enqueue(
-          encoder.encode(
-            "data: " +
-            JSON.stringify({
-              type: "text",
-              text
-            }) +
-            "\n\n"
-          )
-        );
-
-        controller.enqueue(
-          encoder.encode(
-            "data: " +
-            JSON.stringify({
-              type: "done",
-              model: FALLBACK_MODEL
-            }) +
-            "\n\n"
-          )
-        );
-
-
-        if (
-          executionContext &&
-          executionContext.waitUntil
-        ) {
-          executionContext.waitUntil(
-            extractMemory(
-              env,
-              userId,
-              userMessage,
-              text
-            )
-          );
-        }
-
-        controller.close();
-      }
-    });
-
-  return new Response(
-    stream,
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+    FALLBACK_MODEL + ":generateContent",
     {
+      method: "POST",
       headers: {
-        "Content-Type":
-          "text/event-stream; charset=utf-8",
-
-        "Cache-Control":
-          "no-cache, no-transform",
-
-        "Connection":
-          "keep-alive",
-        ...CORS_HEADERS
-      }
+        "Content-Type": "application/json",
+        "X-goog-api-key": env.GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: SYSTEM_PROMPT }]
+        },
+        contents: buildContents(messages, memories),
+        generationConfig
+      })
     }
   );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      FALLBACK_MODEL + " HTTP " + response.status + ": " + errorText
+    );
+  }
+
+  const data = await response.json();
+
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+
+  const text = parts
+    .filter(function(part) {
+      return (
+        part?.thought !== true &&
+        typeof part?.text === "string"
+      );
+    })
+    .map(function(part) {
+      return part.text;
+    })
+    .join("");
+
+  if (!text.trim()) {
+    throw new Error(FALLBACK_MODEL + " respondeu sem texto.");
+  }
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          "data: " +
+          JSON.stringify({ type: "text", text }) +
+          "\n\n"
+        )
+      );
+
+      controller.enqueue(
+        encoder.encode(
+          "data: " +
+          JSON.stringify({
+            type: "done",
+            model: FALLBACK_MODEL
+          }) +
+          "\n\n"
+        )
+      );
+
+      if (executionContext?.waitUntil) {
+        executionContext.waitUntil(
+          extractMemory(env, userId, userMessage, text)
+        );
+      }
+
+      controller.close();
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      ...CORS_HEADERS
+    }
+  });
 }
-
-
-/* =========================
-   POST /api/chat
-========================= */
 
 export async function onRequestOptions() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS
+  });
 }
 
-export async function onRequestPost(
-  context
-) {
-  const request =
-    context.request;
-
-  const env =
-    context.env;
+export async function onRequestPost(context) {
+  const request = context.request;
+  const env = context.env;
 
   try {
-
-    if (!env.GEMMA_4_31B) {
+    if (!env.GEMINI_API_KEY) {
       return jsonResponse(
         {
-          error:
-            "GEMMA_4_31B não configurada no Cloudflare."
+          error: "GEMINI_API_KEY não configurada no Cloudflare."
         },
         500
       );
     }
 
-
-    const body =
-      await request.json();
+    const body = await request.json();
 
     const rawUserId =
       typeof body?.userId === "string"
         ? body.userId.trim()
         : "";
 
-    const userId =
-      rawUserId.slice(0, 100);
+    const userId = rawUserId.slice(0, 100);
 
     const directMessage =
       typeof body?.message === "string"
         ? body.message.trim().slice(0, 4000)
         : "";
+
+    const mode =
+      ["none", "low", "medium", "high", "maximum"].includes(body?.mode)
+        ? body.mode
+        : "medium";
 
     let incomingMessages = [];
 
@@ -843,88 +603,58 @@ export async function onRequestPost(
 
     if (
       directMessage &&
-      !incomingMessages.some(
-        function(message) {
-          return (
-            message?.role === "user" &&
-            String(
-              message?.content || ""
-            ) === directMessage
-          );
-        }
-      )
+      !incomingMessages.some(function(message) {
+        return (
+          message?.role === "user" &&
+          String(message?.content || "") === directMessage
+        );
+      })
     ) {
-      incomingMessages =
-        incomingMessages.concat([
-          {
-            role: "user",
-            content: directMessage
-          }
-        ]);
+      incomingMessages = incomingMessages.concat([{
+        role: "user",
+        content: directMessage
+      }]);
     }
-
 
     const userMessage =
       directMessage ||
       incomingMessages
         .filter(function(message) {
-          return (
-            message?.role === "user"
-          );
+          return message?.role === "user";
         })
         .at(-1)
         ?.content ||
       "";
 
-
-    const messages =
-      incomingMessages
-        .slice(-4);
-
+    const messages = incomingMessages.slice(-4);
 
     if (!messages.length) {
       return jsonResponse(
         {
-          error:
-            "Nenhuma mensagem foi enviada para a NEXA."
+          error: "Nenhuma mensagem foi enviada para a NEXA."
         },
         400
       );
     }
 
+    const memories = await getMemories(env, userId);
 
-    const memories =
-      await getMemories(
-        env,
-        userId
-      );
-
-
-    /* =========================
-       GEMMA — PRINCIPAL
-    ========================= */
-
-    const controller =
-      new AbortController();
+    const controller = new AbortController();
 
     try {
+      const response = await createModelRequest(
+        PRIMARY_MODEL,
+        env.GEMINI_API_KEY,
+        messages,
+        memories,
+        controller.signal,
+        mode
+      );
 
-      const response =
-        await createModelRequest(
-          PRIMARY_MODEL,
-          env.GEMMA_4_31B,
-          messages,
-          memories,
-          controller.signal
-        );
-
-
-      const result =
-        await waitForFirstText(
-          response,
-          PRIMARY_MODEL
-        );
-
+      const result = await waitForFirstText(
+        response,
+        PRIMARY_MODEL
+      );
 
       return createClientStream(
         env,
@@ -937,46 +667,35 @@ export async function onRequestPost(
         context,
         PRIMARY_MODEL
       );
-
-    } catch (gemmaError) {
-
+    } catch (geminiError) {
       try {
         controller.abort();
       } catch (error) {}
 
-
-      /* =========================
-         GEMINI — FALLBACK
-      ========================= */
-
-      if (!env.GEMINI_API_KEY) {
+      if (!env.GEMMA_4_31B) {
         return jsonResponse(
           {
             error:
-              "A NEXA não conseguiu responder com o modelo principal. Configure GEMINI_API_KEY para ativar o fallback."
+              "A NEXA não conseguiu responder com o Gemini. Configure GEMMA_4_31B para ativar o fallback."
           },
           503
         );
       }
 
       try {
+        const response = await createModelRequest(
+          "gemma-4-31b-it",
+          env.GEMMA_4_31B,
+          messages,
+          memories,
+          null,
+          mode
+        );
 
-        const response =
-          await createModelRequest(
-            FALLBACK_MODEL,
-            env.GEMINI_API_KEY,
-            messages,
-            memories,
-            null
-          );
-
-
-        const result =
-          await waitForFirstText(
-            response,
-            FALLBACK_MODEL
-          );
-
+        const result = await waitForFirstText(
+          response,
+          "gemma-4-31b-it"
+        );
 
         return createClientStream(
           env,
@@ -987,24 +706,19 @@ export async function onRequestPost(
           userId,
           userMessage,
           context,
-          FALLBACK_MODEL
+          "gemma-4-31b-it"
         );
-
-      } catch (geminiError) {
-
-        return createFallbackResponse(
-          env,
-          messages,
-          memories,
-          userId,
-          userMessage,
-          context
+      } catch (gemmaError) {
+        return jsonResponse(
+          {
+            error:
+              "A NEXA não conseguiu responder agora. Tente novamente."
+          },
+          503
         );
       }
     }
-
   } catch (error) {
-
     return jsonResponse(
       {
         error:
