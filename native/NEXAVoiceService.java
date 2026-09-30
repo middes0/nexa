@@ -27,6 +27,8 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
     private TextToSpeech tts;
     private boolean commandMode = false;
     private boolean readyToSpeak = false;
+    private boolean pendingWakeResponse = false;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override
     public void onCreate() {
