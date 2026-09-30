@@ -69,7 +69,7 @@ let conversations = [];
 let activeConversationId = null;
 
 let responseMode =
-  localStorage.getItem(MODE_KEY) || "medium";
+  localStorage.getItem(MODE_KEY) || "none";
 
 if (!MODE_INFO[responseMode]) {
   responseMode = "medium";
@@ -2962,7 +2962,7 @@ restoreSavedNexaVoice();
         !waitingForReply &&
         panel.classList.contains("listening")
       ) {
-        scheduleRecognitionRestart(500);
+        scheduleRecognitionRestart(250);
       }
     };
 
@@ -2974,7 +2974,7 @@ restoreSavedNexaVoice();
       recognitionEnded = true;
 
       if (voiceModeActive && !waitingForReply) {
-        scheduleRecognitionRestart(1000);
+        scheduleRecognitionRestart(650);
       }
 
       return false;
@@ -3061,7 +3061,7 @@ restoreSavedNexaVoice();
       return;
     }
 
-    scheduleRecognitionRestart(500);
+    scheduleRecognitionRestart(250);
   }
 
   window.NEXAVoiceMode = {
