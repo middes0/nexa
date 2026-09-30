@@ -211,7 +211,7 @@ function normalizeCalculatorExpression(input) {
   expression = expression
     .replace(/quanto é|quanto e|calcule|calcular|resultado de|qual é|qual e/g, "")
     .replace(/\bde\b/g, "*")
-    .replace(/\bx\b/g, "*")
+    .replace(/[x×]/g, "*")
     .replace(/,/g, ".")
     .replace(/%/g, "/100")
     .replace(/[^0-9+\-*\/().%^ \t]/g, "")
