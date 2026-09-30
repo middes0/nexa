@@ -7,6 +7,7 @@ const newChatButton = document.getElementById("newChatButton");
 
 const MEMORY_KEY = "nexa_conversation";
 const USER_ID_KEY = "nexa_user_id";
+const API_URL = "https://nexa-2.pages.dev/api/chat";
 
 const history = [];
 
@@ -324,7 +325,7 @@ function updateStreamingMessage(
 
 async function askNexa(text) {
   const response =
-    await fetch("/api/chat", {
+    await fetch(API_URL, {
       method: "POST",
 
       headers: {
