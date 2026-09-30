@@ -12,7 +12,6 @@
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
   <div class="ambient ambient-three"></div>
-
   <main class="app">
     <header class="topbar">
       <div class="brand">
@@ -22,187 +21,42 @@
           <span>Assistente pessoal</span>
         </div>
       </div>
-
       <div class="topbar-actions">
         <span class="status"><i></i> Online</span>
         <button type="button" id="voiceButton" class="voice-button" aria-label="Escolher voz" title="Voz da NEXA">◉</button>
         <button type="button" id="voiceModeButton" class="voice-mode-button" aria-label="Abrir modo de voz" title="Modo de voz">◌</button>
         <button type="button" id="speechToggleButton" class="speech-toggle-button" aria-label="Calar a NEXA" title="NEXA falando — toque para calar">◖</button>
-<div class="voice-overlay" id="voiceOverlay"></div>
-<aside class="voice-panel" id="voicePanel" aria-label="Voz da NEXA">
-  <div class="voice-header"><div><strong>Voz da NEXA</strong><span>Escolha como ela vai falar.</span></div><button type="button" id="voiceCloseButton" class="voice-close" aria-label="Fechar">×</button></div>
-  <div class="voice-content"><div id="voiceList" class="voice-list"></div><div class="voice-actions"><button type="button" id="voiceTestButton">Testar voz</button><button type="button" id="voiceSaveButton">Salvar preferência</button></div></div>
-</aside>
+        <div class="voice-overlay" id="voiceOverlay"></div>
+        <aside class="voice-panel" id="voicePanel" aria-label="Voz da NEXA">
+          <div class="voice-header"><div><strong>Voz da NEXA</strong><span>Escolha como ela vai falar.</span></div><button type="button" id="voiceCloseButton" class="voice-close" aria-label="Fechar">×</button></div>
+          <div class="voice-content"><div id="voiceList" class="voice-list"></div><div class="voice-actions"><button type="button" id="voiceTestButton">Testar voz</button><button type="button" id="voiceSaveButton">Salvar preferência</button></div></div>
+        </aside>
         <button type="button" id="historyButton" class="history-button" aria-label="Abrir histórico" title="Histórico">☰</button>
         <button type="button" id="memoryButton" class="memory-button" aria-label="Abrir memórias" title="Memórias">◈</button>
         <button type="button" id="automationButton" class="automation-button" aria-label="Abrir automações" title="Automações">⌁</button>
-        <button type="button" id="newChatButton" class="new-chat-button">
-          Nova conversa
-        </button>
+        <button type="button" id="newChatButton" class="new-chat-button">Nova conversa</button>
       </div>
     </header>
-
     <div class="voice-mode-overlay" id="voiceModeOverlay"></div>
     <section class="voice-mode" id="voiceMode" aria-label="Modo de voz" aria-hidden="true">
-      <div class="voice-mode-top">
-        <div>
-          <strong>NEXA</strong>
-          <span id="voiceModeState">Pronta para ouvir</span>
-        </div>
-        <button type="button" id="voiceModeClose" class="voice-mode-close" aria-label="Fechar modo de voz">×</button>
-      </div>
-
-      <div class="voice-orb-stage" id="voiceOrbStage">
-        <div class="voice-orb-aura"></div>
-        <div class="voice-orb-ring voice-orb-ring-one"></div>
-        <div class="voice-orb-ring voice-orb-ring-two"></div>
-        <div class="voice-orb-ring voice-orb-ring-three"></div>
-        <div class="voice-orb-core">
-          <div class="voice-orb-core-glow"></div>
-          <div class="voice-orb-dot"></div>
-        </div>
-      </div>
-
+      <div class="voice-mode-top"><div><strong>NEXA</strong><span id="voiceModeState">Pronta para ouvir</span></div><button type="button" id="voiceModeClose" class="voice-mode-close" aria-label="Fechar modo de voz">×</button></div>
+      <div class="voice-orb-stage" id="voiceOrbStage"><div class="voice-orb-aura"></div><div class="voice-orb-ring voice-orb-ring-one"></div><div class="voice-orb-ring voice-orb-ring-two"></div><div class="voice-orb-ring voice-orb-ring-three"></div><div class="voice-orb-core"><div class="voice-orb-core-glow"></div><div class="voice-orb-dot"></div></div></div>
       <div class="voice-mode-caption" id="voiceModeCaption">Toque no microfone e fale com a NEXA.</div>
-
-      <div class="voice-mode-actions">
-        <button type="button" id="voiceModeMic" class="voice-mode-mic" aria-label="Começar a falar" title="Começar a falar">◉</button>
-      </div>
+      <div class="voice-mode-actions"><button type="button" id="voiceModeMic" class="voice-mode-mic" aria-label="Começar a falar" title="Começar a falar">◉</button></div>
     </section>
-
     <div class="history-overlay" id="historyOverlay"></div>
-    <aside class="history-panel" id="historyPanel" aria-label="Histórico de conversas">
-      <div class="history-header">
-        <div>
-          <strong>Histórico</strong>
-          <span>Suas conversas</span>
-        </div>
-        <button type="button" id="closeHistoryButton" class="history-close" aria-label="Fechar histórico">×</button>
-      </div>
-
-      <div class="history-list" id="historyList"></div>
-    </aside>
-
+    <aside class="history-panel" id="historyPanel" aria-label="Histórico de conversas"><div class="history-header"><div><strong>Histórico</strong><span>Suas conversas</span></div><button type="button" id="closeHistoryButton" class="history-close" aria-label="Fechar histórico">×</button></div><div class="history-list" id="historyList"></div></aside>
     <div class="automation-overlay" id="automationOverlay"></div>
-    <aside class="automation-panel" id="automationPanel" aria-label="Automações da NEXA">
-      <div class="automation-header">
-        <div>
-          <strong>Automações</strong>
-          <span>Lembretes e rotinas da NEXA</span>
-        </div>
-        <button type="button" id="closeAutomationButton" class="automation-close" aria-label="Fechar automações">×</button>
-      </div>
-      <div class="automation-content">
-        <div class="automation-summary" id="automationSummary"></div>
-        <div class="automation-tabs">
-          <button type="button" class="automation-tab active" data-automation-tab="reminders">Lembretes</button>
-          <button type="button" class="automation-tab" data-automation-tab="routines">Rotinas</button>
-        </div>
-        <div class="automation-list" id="automationList"></div>
-      </div>
-    </aside>
-
+    <aside class="automation-panel" id="automationPanel" aria-label="Automações da NEXA"><div class="automation-header"><div><strong>Automações</strong><span>Lembretes e rotinas da NEXA</span></div><button type="button" id="closeAutomationButton" class="automation-close" aria-label="Fechar automações">×</button></div><div class="automation-content"><div class="automation-summary" id="automationSummary"></div><div class="automation-tabs"><button type="button" class="automation-tab active" data-automation-tab="reminders">Lembretes</button><button type="button" class="automation-tab" data-automation-tab="routines">Rotinas</button></div><div class="automation-list" id="automationList"></div></div></aside>
     <div class="memory-overlay" id="memoryOverlay"></div>
-    <aside class="memory-panel" id="memoryPanel" aria-label="Memórias da NEXA">
-      <div class="memory-header">
-        <div>
-          <strong>Memórias</strong>
-          <span>O que a NEXA lembra sobre você</span>
-        </div>
-        <button type="button" id="closeMemoryButton" class="memory-close" aria-label="Fechar memórias">×</button>
-      </div>
-
-      <div class="memory-content">
-        <div class="memory-info">
-          <span class="memory-info-icon">◈</span>
-          <p>Essas informações ficam salvas para a NEXA usar em outras conversas.</p>
-        </div>
-
-        <div class="memory-list" id="memoryList"></div>
-
-        <button type="button" id="clearMemoriesButton" class="clear-memories-button">
-          Apagar todas as memórias
-        </button>
-      </div>
-    </aside>
-
-    <section class="hero">
-      <div class="core">
-        <div class="core-aura"></div>
-        <div class="core-glow"></div>
-        <div class="core-ring ring-one"></div>
-        <div class="core-ring ring-two"></div>
-        <div class="core-ring ring-three"></div>
-        <div class="particle particle-one"></div>
-        <div class="particle particle-two"></div>
-        <div class="particle particle-three"></div>
-        <div class="particle particle-four"></div>
-        <div class="particle particle-five"></div>
-        <div class="particle particle-six"></div>
-        <div class="particle particle-seven"></div>
-        <div class="particle particle-eight"></div>
-        <div class="core-energy"></div>
-        <div class="core-dot"></div>
-      </div>
-
-      <h2>Olá. Eu sou a NEXA.</h2>
-      <p>Seu assistente pessoal está pronto para começar.</p>
-    </section>
-
-    <section class="chat" id="chat" aria-live="polite" aria-label="Conversa com a NEXA">
-      <div class="message nexa">
-        <span class="label">NEXA</span>
-        <p>E aí. Sou a NEXA. Já tô online — manda a boa.</p>
-      </div>
-    </section>
-
-    <form class="composer" id="composer" autocomplete="off">
-      <input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off" aria-label="Mensagem">
-
-      <div class="composer-mode">
-        <button type="button" id="modeButton" class="mode-button" aria-label="Escolher modo de resposta" title="Modo de resposta">M</button>
-
-        <div class="mode-menu" id="modeMenu">
-          <div class="mode-menu-title">Modo de resposta</div>
-
-          <button type="button" data-mode="none">
-            <strong>Nenhum</strong>
-            <span>Quase instantâneo, sem pensar muito.</span>
-          </button>
-
-          <button type="button" data-mode="low">
-            <strong>Baixo</strong>
-            <span>Pensa um pouco antes de responder.</span>
-          </button>
-
-          <button type="button" data-mode="medium">
-            <strong>Médio</strong>
-            <span>Equilibra o tempo de pensar e responder.</span>
-          </button>
-
-          <button type="button" data-mode="high">
-            <strong>Alto</strong>
-            <span>Pensa mais para dar uma resposta melhor.</span>
-          </button>
-
-          <button type="button" data-mode="maximum">
-            <strong>Máximo</strong>
-            <span>Pensa muito mais, com maior profundidade.</span>
-          </button>
-        </div>
-      </div>
-
-      <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
-      <div class="image-preview" id="imagePreview" aria-live="polite"></div>
-      <button type="button" id="imageButton" aria-label="Enviar imagem" title="Analisar imagem">▧</button>
-      <button type="button" id="micButton" aria-label="Microfone" title="Falar">◉</button>
-      <button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button>
-    </form>
-
+    <aside class="memory-panel" id="memoryPanel" aria-label="Memórias da NEXA"><div class="memory-header"><div><strong>Memórias</strong><span>O que a NEXA lembra sobre você</span></div><button type="button" id="closeMemoryButton" class="memory-close" aria-label="Fechar memórias">×</button></div><div class="memory-content"><div class="memory-info"><span class="memory-info-icon">◈</span><p>Essas informações ficam salvas para a NEXA usar em outras conversas.</p></div><div class="memory-list" id="memoryList"></div><button type="button" id="clearMemoriesButton" class="clear-memories-button">Apagar todas as memórias</button></div></aside>
+    <section class="hero"><div class="core"><div class="core-aura"></div><div class="core-glow"></div><div class="core-ring ring-one"></div><div class="core-ring ring-two"></div><div class="core-ring ring-three"></div><div class="particle particle-one"></div><div class="particle particle-two"></div><div class="particle particle-three"></div><div class="particle particle-four"></div><div class="particle particle-five"></div><div class="particle particle-six"></div><div class="particle particle-seven"></div><div class="particle particle-eight"></div><div class="core-energy"></div><div class="core-dot"></div></div><h2>Olá. Eu sou a NEXA.</h2><p>Seu assistente pessoal está pronto para começar.</p></section>
+    <section class="chat" id="chat" aria-live="polite" aria-label="Conversa com a NEXA"><div class="message nexa"><span class="label">NEXA</span><p>E aí. Sou a NEXA. Já tô online — manda a boa.</p></div></section>
+    <form class="composer" id="composer" autocomplete="off"><input id="messageInput" type="text" placeholder="Digite uma mensagem..." autocomplete="off" aria-label="Mensagem"><div class="composer-mode"><button type="button" id="modeButton" class="mode-button" aria-label="Escolher modo de resposta" title="Modo de resposta">M</button><div class="mode-menu" id="modeMenu"><div class="mode-menu-title">Modo de resposta</div><button type="button" data-mode="none"><strong>Nenhum</strong><span>Quase instantâneo, sem pensar muito.</span></button><button type="button" data-mode="low"><strong>Baixo</strong><span>Pensa um pouco antes de responder.</span></button><button type="button" data-mode="medium"><strong>Médio</strong><span>Equilibra o tempo de pensar e responder.</span></button><button type="button" data-mode="high"><strong>Alto</strong><span>Pensa mais para dar uma resposta melhor.</span></button><button type="button" data-mode="maximum"><strong>Máximo</strong><span>Pensa muito mais, com maior profundidade.</span></button></div></div><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><div class="image-preview" id="imagePreview" aria-live="polite"></div><button type="button" id="imageButton" aria-label="Enviar imagem" title="Analisar imagem">▧</button><button type="button" id="micButton" aria-label="Microfone" title="Falar">◉</button><button type="submit" aria-label="Enviar" title="Enviar mensagem">➤</button></form>
     <footer>NEXA v0.3 • Groq conectado via Cloudflare</footer>
   </main>
-
   <script src="automation.js"></script>
   <script src="script.js?v=15"></script>
 </body>
 </html>
+<!-- Cloudflare deploy test: 2026-09-30 -->
