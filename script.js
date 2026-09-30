@@ -1157,6 +1157,54 @@ function handleNaturalLocalCommand(text) {
     return "done";
   }
 
+  const openMatch = normalized.match(
+    /^(?:nexa[,:]?\s*)?(?:abre|abrir|volta|voltar|retoma|retomar)\s+(?:a\s+)?(?:conversa|chat)\s+(?:sobre|do|da|de)\s+(.+)$/
+  );
+
+  if (openMatch) {
+    const query = openMatch[1].trim();
+    const conversation = conversations.find(function(item) {
+      const title = String(item.title || "").toLowerCase();
+      const content = (item.messages || [])
+        .map(function(message) {
+          return message && message.content
+            ? String(message.content).toLowerCase()
+            : "";
+        })
+        .join(" ");
+
+      return title.includes(query) || content.includes(query);
+    });
+
+    if (conversation) {
+      openConversation(conversation.id);
+      return "done";
+    }
+
+    addMessage("Não achei uma conversa sobre isso no histórico.", "nexa");
+    return "done";
+  }
+
+  if (/^(?:nexa[,:]?\s*)?(?:volta|voltar|retoma|retomar)\s+(?:pra|para)\s+(?:aquela|essa)\s+conversa$/.test(normalized)) {
+    if (conversations.length > 1) {
+      const previous = conversations
+        .filter(function(item) {
+          return item.id !== activeConversationId;
+        })
+        .sort(function(a, b) {
+          return (b.updatedAt || 0) - (a.updatedAt || 0);
+        })[0];
+
+      if (previous) {
+        openConversation(previous.id);
+        return "done";
+      }
+    }
+
+    addMessage("Não encontrei outra conversa para voltar.", "nexa");
+    return "done";
+  }
+
   if (/^(nexa[,:]?\s*)?(fecha|feche|fechar)\s+(o\s+)?(historico|painel)$/.test(normalized)) {
     closeHistoryPanel();
     return "done";
