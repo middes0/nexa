@@ -520,8 +520,6 @@ function closeVoicePanel() {
 }
 
 function stopNexaSpeech() {
-  speechEnabled = false;
-  localStorage.setItem(SPEECH_ENABLED_KEY, "false");
   elevenLabsRequestId++;
 
   if ("speechSynthesis" in window) {
@@ -2083,6 +2081,24 @@ composer.addEventListener(
       modeButton.disabled = false;
       input.focus();
       return;
+    }
+
+    if (window.NEXAAutomation?.handle) {
+      const automation = await window.NEXAAutomation.handle(text);
+
+      if (automation?.handled) {
+        addMessage(automation.reply, "nexa");
+        saveActiveConversation();
+
+        sendButton.disabled = false;
+        micButton.disabled = false;
+        newChatButton.disabled = false;
+        modeButton.disabled = false;
+        wakeCommandMode = false;
+        scheduleWakeRestart();
+        input.focus();
+        return;
+      }
     }
 
     sendButton.disabled = true;
