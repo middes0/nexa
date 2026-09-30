@@ -1552,7 +1552,7 @@ export async function onRequestPost(context) {
     const mode =
       ["none", "low", "medium", "high", "maximum"].includes(body?.mode)
         ? body.mode
-        : "medium";
+        : "none";
 
     let incomingMessages = [];
 
