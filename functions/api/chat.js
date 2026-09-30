@@ -48,6 +48,9 @@ const CORS_HEADERS = {
 };
 
 const THINKING_LEVELS = {
+  // GPT-OSS não possui "none"; low é o menor nível suportado.
+  // Isso evita que o modo "Nenhum" caia no padrão medium e fique lento.
+  none: "low",
   low: "low",
   medium: "medium",
   high: "high",
@@ -109,7 +112,7 @@ async function createElevenSpeechResponse(apiKey, voiceId, text) {
   const response = await fetch(
     "https://api.elevenlabs.io/v1/text-to-speech/" +
       encodeURIComponent(voiceId) +
-      "?output_format=mp3_44100_128",
+      "?output_format=mp3_44100_64",
     {
       method: "POST",
       headers: {
@@ -986,15 +989,9 @@ function createModelRequest(model, apiKey, messages, memories, signal, mode, use
     stream: true
   };
 
-  if (model === PRIMARY_MODEL && mode !== "none") {
+  if (model === PRIMARY_MODEL || model === FALLBACK_MODEL) {
     body.reasoning_effort =
-      mode === "maximum"
-        ? "high"
-        : mode === "high"
-          ? "high"
-          : mode === "medium"
-            ? "medium"
-            : "low";
+      THINKING_LEVELS[mode] || "low";
   }
 
   return fetch(
