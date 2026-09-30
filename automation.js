@@ -295,8 +295,8 @@ async function scheduleNativeReminder(reminder) {
 
     const notification = {
       id: getNativeNotificationId(reminder.id),
-      title: "NEXA",
-      body: reminder.text,
+      title: "Lembrete da NEXA",
+      body: reminder.text ? "Lembrete: " + reminder.text : "Você tem um lembrete agendado.",
       schedule: {
         at: new Date(reminder.triggerAt),
         allowWhileIdle: true
