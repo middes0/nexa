@@ -1564,7 +1564,10 @@ export async function onRequestPost(context) {
         ?.content ||
       "";
 
-    const messages = incomingMessages.slice(-8);\n\n    const imageContext =\n      typeof body?.imageContext === "string" &&\n      /^data:image\\/(png|jpe?g|webp);base64,/i.test(body.imageContext) &&\n      body.imageContext.length <= 16 * 1024 * 1024\n        ? body.imageContext\n        : "";
+    const messages = incomingMessages.slice(-8);
+
+    const imageContext =
+      typeof body?.imageContext === "string" &&\n      /^data:image\\/(png|jpe?g|webp);base64,/i.test(body.imageContext) &&\n      body.imageContext.length <= 16 * 1024 * 1024\n        ? body.imageContext\n        : "";
 
     if (!messages.length) {
       return jsonResponse(
