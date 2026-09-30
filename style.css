@@ -1268,10 +1268,12 @@ footer {
 }
 
 .mode-button {
+  width: 40px;
   min-width: 40px;
-  width: auto;
   height: 40px;
-  padding: 0 9px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   border: 0;
   border-radius: 12px;
   background: #171021;
@@ -1374,8 +1376,9 @@ footer {
   }
 
   .mode-button {
-    min-width: 42px;
-    padding: 0 7px;
-    font-size: 10px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    font-size: 15px;
   }
 }
