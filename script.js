@@ -202,18 +202,47 @@ function getElevenVoiceFamilyKey(voice) {
     .trim();
 }
 
+function isPortugueseElevenVoice(voice) {
+  const labels = voice && voice.labels ? voice.labels : {};
+  const labelLanguage = String(labels.language || "").toLowerCase();
+
+  if (
+    labelLanguage === "pt" ||
+    labelLanguage === "pt-br" ||
+    labelLanguage === "pt-pt" ||
+    labelLanguage.includes("portugu")
+  ) {
+    return true;
+  }
+
+  return Array.isArray(voice?.verifiedLanguages) &&
+    voice.verifiedLanguages.some(function(language) {
+      const code = String(
+        language?.language || language?.locale || ""
+      ).toLowerCase();
+
+      return (
+        code === "pt" ||
+        code.startsWith("pt-") ||
+        code.includes("portugu")
+      );
+    });
+}
+
 function getDistinctElevenVoices() {
   const seen = new Set();
   const result = [];
 
-  availableVoices.forEach(function(voice) {
-    const key = getElevenVoiceFamilyKey(voice);
+  availableVoices
+    .filter(isPortugueseElevenVoice)
+    .forEach(function(voice) {
+      const key = getElevenVoiceFamilyKey(voice);
 
-    if (!key || seen.has(key)) return;
+      if (!key || seen.has(key)) return;
 
-    seen.add(key);
-    result.push(voice);
-  });
+      seen.add(key);
+      result.push(voice);
+    });
 
   return result;
 }
