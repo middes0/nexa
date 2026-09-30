@@ -3008,3 +3008,112 @@ button:disabled {
     height: 62px;
   }
 }
+
+
+/* =========================
+   NEXA — LAYOUT POLISH
+========================= */
+
+.app {
+  width: min(900px, 100%);
+  padding: 18px 22px 16px;
+}
+
+.topbar {
+  min-height: 58px;
+  padding: 0 0 14px;
+  gap: 18px;
+  border-bottom-color: rgba(139, 92, 246, 0.14);
+}
+
+.topbar-actions {
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status {
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+.hero {
+  padding: 38px 10px 24px;
+}
+
+.core,
+.core-aura {
+  width: 128px;
+  height: 128px;
+}
+
+.ring-three {
+  width: 118px;
+  height: 118px;
+}
+
+.hero h2 {
+  margin-top: 18px;
+  margin-bottom: 6px;
+  font-size: 24px;
+}
+
+.hero p {
+  font-size: 13px;
+}
+
+.chat {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  gap: 10px;
+  padding: 4px 8px 18px;
+}
+
+.message {
+  max-width: min(760px, 88%);
+  padding: 12px 15px;
+  border-color: rgba(139, 92, 246, 0.12);
+}
+
+.message p {
+  line-height: 1.55;
+}
+
+.composer {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding: 9px;
+  gap: 7px;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+footer {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .app { padding: 14px; }
+  .topbar { align-items: flex-start; }
+  .topbar-actions { max-width: 62%; }
+  .status { display: none; }
+  .hero { padding-top: 32px; }
+  .chat { padding-left: 2px; padding-right: 2px; }
+  .message { max-width: 94%; }
+}
+
+@media (max-width: 600px) {
+  .app { padding: 12px; }
+  .topbar { gap: 10px; padding-bottom: 12px; }
+  .brand h1 { font-size: 19px; }
+  .topbar-actions { gap: 5px; max-width: none; }
+  .hero { padding: 30px 6px 20px; }
+  .core,
+  .core-aura { width: 112px; height: 112px; }
+  .ring-three { width: 104px; height: 104px; }
+  .hero h2 { font-size: 21px; margin-top: 15px; }
+  .hero p { font-size: 12px; }
+  .composer { padding: 8px; border-radius: 15px; }
+  .message { padding: 11px 13px; }
+}
