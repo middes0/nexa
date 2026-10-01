@@ -41,7 +41,28 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // Reafirma o foreground e a escuta sempre que o Android recriar o serviço.
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification());
+        } catch (Exception ignored) {}
+        if (recognizer == null) {
+            startWakeListening();
+        }
         return START_STICKY;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // Sair da tela/fechar a tarefa não deve desligar a NEXA.
+        try {
+            Intent restart = new Intent(getApplicationContext(), NEXAVoiceService.class);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                getApplicationContext().startForegroundService(restart);
+            } else {
+                getApplicationContext().startService(restart);
+            }
+        } catch (Exception ignored) {}
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override
@@ -142,11 +163,22 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
     private void startRecognition(boolean command) {
         stopRecognizer();
 
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             return;
         }
 
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        try {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        } catch (SecurityException e) {
+            recognizer = null;
+            handler.postDelayed(() -> startRecognition(command), 1000L);
+            return;
+        }
         recognizer.setRecognitionListener(new RecognitionListener() {
             @Override public void onReadyForSpeech(Bundle params) {}
 
@@ -208,7 +240,11 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
 
         try {
             recognizer.startListening(intent);
+        } catch (SecurityException e) {
+            recognizer = null;
+            handler.postDelayed(() -> startRecognition(command), 1000L);
         } catch (Exception e) {
+            recognizer = null;
             handler.postDelayed(() -> startRecognition(command), 500L);
         }
     }
