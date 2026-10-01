@@ -62,7 +62,8 @@ jobs:
               android:name=".NEXAVoiceService"
               android:enabled="true"
               android:exported="false"
-              android:foregroundServiceType="microphone" />
+              android:foregroundServiceType="microphone"
+              android:stopWithTask="false" />
 
           <receiver
               android:name=".NEXAReminderReceiver"
@@ -117,14 +118,13 @@ jobs:
               public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
                   super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                   if (requestCode == 7401) {
-                      boolean granted = true;
-                      for (int result : grantResults) {
-                          if (result != PackageManager.PERMISSION_GRANTED) {
-                              granted = false;
-                              break;
-                          }
+                      // O microfone é obrigatório para a escuta. Notificações não podem
+                      // impedir a inicialização do serviço de voz.
+                      boolean microphoneGranted =
+                          checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+                      if (microphoneGranted) {
+                          startNexaVoiceService();
                       }
-                      if (granted) startNexaVoiceService();
                   }
               }
 
