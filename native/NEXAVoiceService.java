@@ -34,16 +34,29 @@ public class NEXAVoiceService extends Service implements TextToSpeech.OnInitList
     public void onCreate() {
         super.onCreate();
         createChannel();
-        startForeground(NOTIFICATION_ID, buildNotification());
+        startNexaForeground();
         tts = new TextToSpeech(this, this);
         startWakeListening();
+    }
+
+    private void startNexaForeground() {
+        Notification notification = buildNotification();
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            );
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         // Reafirma o foreground e a escuta sempre que o Android recriar o serviço.
         try {
-            startForeground(NOTIFICATION_ID, buildNotification());
+            startNexaForeground();
         } catch (Exception ignored) {}
         if (recognizer == null) {
             startWakeListening();
