@@ -86,7 +86,30 @@ jobs:
           if "android.Manifest" not in text:
               text = text.replace(
                   "package com.nexa.assistant;",
-                  "package com.nexa.assistant;\n\nimport android.Manifest;\nimport android.content.Intent;\nimport android.content.pm.PackageManager;\nimport android.os.Build;"
+                  "package com.nexa.assistant;\n\nimport android.Manifest;\nimport android.content.Intent;\nimport android.content.pm.PackageManager;\nimport android.os.Build;\nimport android.webkit.PermissionRequest;\nimport android.webkit.WebChromeClient;"
+              )
+
+          if "setWebChromeClient" not in text:
+              text = text.replace(
+                  "public class MainActivity extends BridgeActivity {",
+                  """public class MainActivity extends BridgeActivity {
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  getBridge().getWebView().setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          runOnUiThread(() -> {
+                              if (request.getOrigin() != null &&
+                                  request.getResources() != null) {
+                                  request.grant(request.getResources());
+                              } else {
+                                  request.deny();
+                              }
+                          });
+                      }
+                  });
+              }"""
               )
 
           on_create = '''\n    @Override
